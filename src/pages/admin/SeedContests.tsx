@@ -42,7 +42,6 @@ function toDateStr(y: number, m: number, d: number) {
 
 function getStatus(y: number, m: number, d: number): 'Upcoming' | 'Active' | 'Completed' {
   const now = new Date();
-  const contestDate = new Date(y, m, d);
   // Compare just dates — if contest date is today or future, it's Upcoming
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const cDate = new Date(y, m, d);

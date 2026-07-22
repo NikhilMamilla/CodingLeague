@@ -5,7 +5,7 @@ import { db, storage } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   Camera, Save, ExternalLink, Code2, User,
-  GraduationCap, MapPin, Phone, Mail, Shield, Github, Linkedin,
+  GraduationCap, MapPin, Phone, Mail, Shield, Link,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { BADGE_META } from '../../types';
@@ -279,7 +279,7 @@ export default function MyProfile() {
             <p className="text-[10px] text-text-secondary/60 uppercase tracking-wider">Social Links (optional)</p>
             <div>
               <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
-                <Github size={10} /> GitHub
+                <Link size={10} /> GitHub
               </label>
               <input
                 className="input-field text-xs"
@@ -290,7 +290,7 @@ export default function MyProfile() {
             </div>
             <div>
               <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
-                <Linkedin size={10} /> LinkedIn
+                <Link size={10} /> LinkedIn
               </label>
               <input
                 className="input-field text-xs"
