@@ -5,7 +5,8 @@ import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
 } from 'firebase/auth';
-import { auth } from '../../lib/firebase';
+import { auth, db } from '../../lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 import CBBLogo from '../../components/ui/CBBLogo';
 import toast from 'react-hot-toast';
@@ -30,10 +31,13 @@ export default function Login() {
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
-  const { signInWithGoogle, user } = useAuth();
+  const { signInWithGoogle, user, role, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => { if (user) navigate('/dashboard'); }, [user]);
+  useEffect(() => {
+    if (authLoading) return; // wait for auth+firestore to settle
+    if (user && role) navigate(role === 'admin' || role === 'super_admin' ? '/admin' : '/dashboard', { replace: true });
+  }, [user, role, authLoading]);
 
   // ── Email + Password login ──
   async function handleLogin() {
@@ -42,7 +46,7 @@ export default function Login() {
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      navigate('/dashboard');
+      // redirect handled by useEffect watching role
     } catch (err: any) {
       const msg = err.code === 'auth/invalid-credential'
         ? 'Invalid email or password'
@@ -56,10 +60,27 @@ export default function Login() {
     setLoading(true);
     try {
       await signInWithGoogle();
-      navigate('/dashboard');
+      // After signInWithGoogle, onAuthStateChanged fires and AuthContext updates.
+      // The useEffect above handles redirect once role is resolved.
+      // For new users who have no participant doc, we check after a brief settle.
+      // Auth state change → onSnapshot tries to find doc → if missing, participant stays null.
+      // We redirect to /register in that case after a short poll.
+      const checkNewUser = async () => {
+        const firebaseUser = auth.currentUser;
+        if (!firebaseUser) return;
+        const snap = await getDoc(doc(db, 'participants', firebaseUser.uid));
+        if (!snap.exists()) {
+          toast('Welcome! Please complete your registration.', { icon: '👋' });
+          navigate('/register');
+        }
+        // If doc exists, useEffect with role will handle redirect
+      };
+      // Small delay to let onAuthStateChanged + onSnapshot settle
+      setTimeout(checkNewUser, 800);
     } catch (err: any) {
       toast.error(err.message ?? 'Google sign-in failed');
-    } finally { setLoading(false); }
+      setLoading(false);
+    }
   }
 
   // ── Forgot password ──

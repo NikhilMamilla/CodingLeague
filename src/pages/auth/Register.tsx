@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { ChevronRight, Eye, EyeOff, ArrowLeft, Code2, ExternalLink } from 'lucide-react';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { auth, db } from '../../lib/firebase';
@@ -11,38 +11,106 @@ import toast from 'react-hot-toast';
 type Step = 1 | 2 | 3;
 
 interface FormData {
+  // Step 1
   fullName: string; email: string; password: string; phone: string;
+  // Step 2
   college: string; university: string; year: string; branch: string;
   city: string; state: string;
-  codeforcesHandle: string; leetcodeUsername: string; github: string; linkedin: string;
+  // Step 3
+  codeforcesHandle: string;
+  leetcodeUsername: string;
+  codechefUsername: string;
+  hackerrankUsername: string;
+  gfgUsername: string;
   acceptRules: boolean; acceptPrivacy: boolean;
 }
 
 const INITIAL: FormData = {
   fullName: '', email: '', password: '', phone: '',
   college: '', university: '', year: '', branch: '', city: '', state: '',
-  codeforcesHandle: '', leetcodeUsername: '', github: '', linkedin: '',
+  codeforcesHandle: '',
+  leetcodeUsername: '',
+  codechefUsername: '',
+  hackerrankUsername: '',
+  gfgUsername: '',
   acceptRules: false, acceptPrivacy: false,
 };
 
 const YEARS    = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 const BRANCHES = ['CSE', 'IT', 'ECE', 'EEE', 'MECH', 'CIVIL', 'AI&DS', 'AI&ML', 'Other'];
 
-async function generateParticipantId(): Promise<string> {
-  const q = query(collection(db, 'participants'), orderBy('participantId', 'desc'), limit(1));
-  const snap = await getDocs(q);
-  if (snap.empty) return 'CBB000001';
-  const last = snap.docs[0].data().participantId as string;
-  const num  = parseInt(last.replace('CBB', ''), 10) + 1;
-  return 'CBB' + String(num).padStart(6, '0');
+// Platform metadata
+// Users paste their full profile URL (e.g. https://www.hackerrank.com/profile/NikhilMamilla)
+const PLATFORMS = [
+  {
+    key: 'hackerrankUsername' as keyof FormData,
+    label: 'HackerRank',
+    placeholder: 'https://www.hackerrank.com/profile/NikhilMamilla',
+    required: true,
+    color: '#00EA64',
+  },
+  {
+    key: 'codechefUsername' as keyof FormData,
+    label: 'CodeChef',
+    placeholder: 'https://www.codechef.com/users/nikhil_mamilla',
+    required: true,
+    color: '#7B4F2E',
+  },
+  {
+    key: 'leetcodeUsername' as keyof FormData,
+    label: 'LeetCode',
+    placeholder: 'https://leetcode.com/u/NikhilMamilla',
+    required: true,
+    color: '#FFA116',
+  },
+  {
+    key: 'codeforcesHandle' as keyof FormData,
+    label: 'Codeforces',
+    placeholder: 'https://codeforces.com/profile/tourist',
+    required: false,
+    color: '#1890FF',
+  },
+  {
+    key: 'gfgUsername' as keyof FormData,
+    label: 'GeeksforGeeks',
+    placeholder: 'https://www.geeksforgeeks.org/user/nikhilmamilla',
+    required: false,
+    color: '#2F8D46',
+  },
+] as const;
+
+/** Validate that the value is a proper https:// URL */
+function isValidUrl(v: string) {
+  try { return new URL(v).protocol === 'https:'; }
+  catch { return false; }
 }
 
-// Step indicator
+async function generateParticipantId(): Promise<string> {
+  try {
+    const q = query(collection(db, 'participants'), orderBy('participantId', 'desc'), limit(1));
+    const snap = await getDocs(q);
+    if (snap.empty) return 'CBB000001';
+    const last = snap.docs[0].data().participantId as string;
+    if (!last || !last.startsWith('CBB')) return 'CBB000001';
+    const num = parseInt(last.replace('CBB', ''), 10);
+    if (isNaN(num)) return 'CBB000001';
+    return 'CBB' + String(num + 1).padStart(6, '0');
+  } catch {
+    // Fallback: use timestamp-based ID if Firestore index is missing
+    const ts = Date.now().toString().slice(-6);
+    return 'CBB' + ts;
+  }
+}
+
 function StepDot({ n, current }: { n: number; current: number }) {
+  const done   = current > n;
+  const active = current === n;
   return (
-    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-heading font-bold transition-colors
-      ${current >= n ? 'bg-neon-cyan text-midnight' : 'bg-card-dark border border-neon-cyan/20 text-text-secondary'}`}>
-      {n}
+    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-heading font-bold transition-all duration-300
+      ${done   ? 'bg-neon-cyan text-midnight scale-110' :
+        active ? 'bg-neon-cyan/20 border border-neon-cyan text-neon-cyan' :
+                 'bg-card-dark border border-neon-cyan/20 text-text-secondary'}`}>
+      {done ? '✓' : n}
     </div>
   );
 }
@@ -75,9 +143,21 @@ export default function Register() {
   }
 
   function validateStep3() {
-    if (!form.codeforcesHandle.trim()) { toast.error('Codeforces handle required'); return false; }
-    if (!form.acceptRules)   { toast.error('Accept the Rules to continue');          return false; }
-    if (!form.acceptPrivacy) { toast.error('Accept the Privacy Policy to continue'); return false; }
+    if (!form.hackerrankUsername.trim()) { toast.error('HackerRank profile URL is required');  return false; }
+    if (!isValidUrl(form.hackerrankUsername)) { toast.error('HackerRank: enter a valid https:// URL'); return false; }
+    if (!form.codechefUsername.trim())   { toast.error('CodeChef profile URL is required');    return false; }
+    if (!isValidUrl(form.codechefUsername))   { toast.error('CodeChef: enter a valid https:// URL');   return false; }
+    if (!form.leetcodeUsername.trim())   { toast.error('LeetCode profile URL is required');    return false; }
+    if (!isValidUrl(form.leetcodeUsername))   { toast.error('LeetCode: enter a valid https:// URL');   return false; }
+    // Optional fields — if filled, must be valid URLs
+    if (form.codeforcesHandle.trim() && !isValidUrl(form.codeforcesHandle)) {
+      toast.error('Codeforces: enter a valid https:// URL'); return false;
+    }
+    if (form.gfgUsername.trim() && !isValidUrl(form.gfgUsername)) {
+      toast.error('GeeksforGeeks: enter a valid https:// URL'); return false;
+    }
+    if (!form.acceptRules)   { toast.error('Accept the Rules to continue');                 return false; }
+    if (!form.acceptPrivacy) { toast.error('Accept the Privacy Policy to continue');        return false; }
     return true;
   }
 
@@ -93,9 +173,16 @@ export default function Register() {
         fullName: form.fullName, email: form.email, phone: form.phone,
         college: form.college, university: form.university, year: form.year,
         branch: form.branch, city: form.city, state: form.state,
-        codeforcesHandle: form.codeforcesHandle,
-        leetcodeUsername: form.leetcodeUsername || null,
-        github: form.github || null, linkedin: form.linkedin || null,
+        // Competitive profiles
+        hackerrankUsername: form.hackerrankUsername,
+        codechefUsername:   form.codechefUsername,
+        leetcodeUsername:   form.leetcodeUsername,
+        codeforcesHandle:   form.codeforcesHandle   || null,
+        gfgUsername:        form.gfgUsername         || null,
+        // Social links
+        github:   null,
+        linkedin: null,
+        // Meta
         photoURL: null, bio: null,
         rating: 800, tier: getTierFromRating(800),
         role: 'participant', badges: [],
@@ -115,12 +202,10 @@ export default function Register() {
 
       <div className="relative w-full max-w-lg">
 
-        {/* Back to home */}
         <Link to="/" className="inline-flex items-center gap-1.5 text-text-secondary/60 hover:text-neon-cyan text-xs font-body transition-colors mb-6">
           <ArrowLeft size={13} /> Back to Home
         </Link>
 
-        {/* Logo + header */}
         <div className="text-center mb-6">
           <div className="flex justify-center mb-3">
             <CBBLogo size={60} glow={false} />
@@ -132,19 +217,18 @@ export default function Register() {
         {/* Step indicator */}
         <div className="flex items-center justify-center gap-2 mb-6">
           <StepDot n={1} current={step} />
-          <div className={`h-px w-10 transition-colors ${step > 1 ? 'bg-neon-cyan' : 'bg-neon-cyan/20'}`} />
+          <div className={`h-px w-10 transition-colors duration-300 ${step > 1 ? 'bg-neon-cyan' : 'bg-neon-cyan/20'}`} />
           <StepDot n={2} current={step} />
-          <div className={`h-px w-10 transition-colors ${step > 2 ? 'bg-neon-cyan' : 'bg-neon-cyan/20'}`} />
+          <div className={`h-px w-10 transition-colors duration-300 ${step > 2 ? 'bg-neon-cyan' : 'bg-neon-cyan/20'}`} />
           <StepDot n={3} current={step} />
         </div>
 
-        {/* Card */}
         <div className="card-glow">
 
           {/* ── Step 1: Personal ── */}
           {step === 1 && (
             <div className="space-y-4">
-              <h2 className="heading-sm mb-1 text-sm">Personal Information</h2>
+              <h2 className="heading-sm text-sm mb-1">Personal Information</h2>
               <div>
                 <label className="input-label">Full Name *</label>
                 <input className="input-field" placeholder="Your full name" value={form.fullName} onChange={e => set('fullName', e.target.value)} />
@@ -177,7 +261,7 @@ export default function Register() {
           {/* ── Step 2: Academic ── */}
           {step === 2 && (
             <div className="space-y-4">
-              <h2 className="heading-sm mb-1 text-sm">Academic Information</h2>
+              <h2 className="heading-sm text-sm mb-1">Academic Information</h2>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="input-label">College *</label>
@@ -219,42 +303,88 @@ export default function Register() {
             </div>
           )}
 
-          {/* ── Step 3: Handles ── */}
+          {/* ── Step 3: Competitive Profiles ── */}
           {step === 3 && (
             <div className="space-y-4">
-              <h2 className="heading-sm mb-1 text-sm">Competitive Profiles</h2>
-              <div>
-                <label className="input-label">Codeforces Handle *</label>
-                <input className="input-field" placeholder="tourist" value={form.codeforcesHandle} onChange={e => set('codeforcesHandle', e.target.value)} />
+              <div className="flex items-center gap-2 mb-1">
+                <Code2 size={15} className="text-neon-cyan" />
+                <h2 className="heading-sm text-sm">Competitive Profiles</h2>
               </div>
-              <div>
-                <label className="input-label">LeetCode Username <span className="text-text-secondary/50">(optional)</span></label>
-                <input className="input-field" placeholder="nikhil_123" value={form.leetcodeUsername} onChange={e => set('leetcodeUsername', e.target.value)} />
+
+              {/* Mandatory note */}
+              <div className="bg-neon-cyan/5 border border-neon-cyan/20 rounded-lg px-3 py-2.5 space-y-1">
+                <p className="text-xs text-text-secondary leading-relaxed">
+                  <span className="text-neon-cyan font-semibold">HackerRank, CodeChef & LeetCode</span> are mandatory.
+                  Codeforces and GFG are optional.
+                </p>
+                <p className="text-[11px] text-text-secondary/60 leading-relaxed">
+                  Paste your <span className="text-white/70">full profile URL</span> including{' '}
+                  <code className="bg-white/10 px-1 rounded text-neon-cyan/80">https://</code>
+                  {' '}— e.g.{' '}
+                  <span className="text-white/50">https://www.hackerrank.com/profile/NikhilMamilla</span>
+                </p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="input-label">GitHub <span className="text-text-secondary/50">(optional)</span></label>
-                  <input className="input-field" placeholder="github.com/you" value={form.github} onChange={e => set('github', e.target.value)} />
-                </div>
-                <div>
-                  <label className="input-label">LinkedIn <span className="text-text-secondary/50">(optional)</span></label>
-                  <input className="input-field" placeholder="linkedin.com/in/you" value={form.linkedin} onChange={e => set('linkedin', e.target.value)} />
-                </div>
+
+              {/* Platform rows */}
+              <div className="space-y-3">
+                {PLATFORMS.map(p => {
+                  const val = form[p.key] as string;
+                  const validUrl = isValidUrl(val.trim());
+                  return (
+                    <div key={p.key}>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="input-label flex items-center gap-1.5">
+                          <span
+                            className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: p.color }}
+                          />
+                          {p.label}
+                          {p.required
+                            ? <span className="text-red-400 ml-0.5">*</span>
+                            : <span className="text-text-secondary/50 text-[10px] ml-1">(optional)</span>
+                          }
+                        </label>
+                        {validUrl && (
+                          <a
+                            href={val.trim()}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[10px] text-neon-cyan/70 hover:text-neon-cyan flex items-center gap-0.5 transition-colors"
+                          >
+                            verify <ExternalLink size={10} />
+                          </a>
+                        )}
+                      </div>
+                      <input
+                        className="input-field text-xs"
+                        placeholder={p.placeholder}
+                        value={val}
+                        onChange={e => set(p.key, e.target.value)}
+                      />
+                    </div>
+                  );
+                })}
               </div>
-              <div className="space-y-2.5 pt-1">
-                <label className="flex items-start gap-2.5 cursor-pointer">
+
+              {/* Checkboxes */}
+              <div className="space-y-2.5 pt-1 border-t border-white/5">
+                <label className="flex items-start gap-2.5 cursor-pointer mt-3">
                   <input type="checkbox" checked={form.acceptRules} onChange={e => set('acceptRules', e.target.checked)} className="mt-0.5 accent-[#00E5FF]" />
                   <span className="text-text-secondary text-xs leading-relaxed">
-                    I accept the <Link to="/rules" target="_blank" className="text-neon-cyan hover:underline">Contest Rules</Link> and agree to participate fairly.
+                    I accept the{' '}
+                    <Link to="/rules" target="_blank" className="text-neon-cyan hover:underline">Contest Rules</Link>{' '}
+                    and agree to participate fairly.
                   </span>
                 </label>
                 <label className="flex items-start gap-2.5 cursor-pointer">
                   <input type="checkbox" checked={form.acceptPrivacy} onChange={e => set('acceptPrivacy', e.target.checked)} className="mt-0.5 accent-[#00E5FF]" />
                   <span className="text-text-secondary text-xs leading-relaxed">
-                    I accept the <Link to="/rules" target="_blank" className="text-neon-cyan hover:underline">Privacy Policy</Link>.
+                    I accept the{' '}
+                    <Link to="/rules" target="_blank" className="text-neon-cyan hover:underline">Privacy Policy</Link>.
                   </span>
                 </label>
               </div>
+
               <div className="flex gap-3 mt-2">
                 <button onClick={() => setStep(2)} className="btn-secondary flex-1 text-xs">Back</button>
                 <button onClick={handleSubmit} disabled={loading}

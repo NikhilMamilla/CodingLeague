@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Handshake } from 'lucide-react';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { Sponsor, SponsorTier } from '../../types';
 
@@ -15,14 +15,17 @@ export default function Sponsors() {
   const [loading, setLoading]   = useState(true);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const q = query(collection(db, 'sponsors'), where('isActive', '==', true), orderBy('tier'));
-        const snap = await getDocs(q);
-        setSponsors(snap.docs.map(d => ({ id: d.id, ...d.data() } as Sponsor)));
-      } catch { /**/ } finally { setLoading(false); }
-    }
-    load();
+    // Real-time listener — reflects admin changes immediately
+    const q = query(
+      collection(db, 'sponsors'),
+      where('isActive', '==', true),
+      orderBy('tier')
+    );
+    const unsub = onSnapshot(q, snap => {
+      setSponsors(snap.docs.map(d => ({ id: d.id, ...d.data() } as Sponsor)));
+      setLoading(false);
+    }, () => { setLoading(false); });
+    return () => unsub();
   }, []);
 
   const grouped: Record<SponsorTier, Sponsor[]> = { Gold: [], Silver: [], Bronze: [] };

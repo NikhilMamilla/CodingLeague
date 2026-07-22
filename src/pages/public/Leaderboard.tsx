@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Search } from 'lucide-react';
-import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import type { SeasonStanding } from '../../types';
+import type { Participant } from '../../types';
 
 const TIER_CLASS: Record<string, string> = {
   Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
@@ -10,24 +10,32 @@ const TIER_CLASS: Record<string, string> = {
 };
 
 export default function Leaderboard() {
-  const [standings, setStandings] = useState<SeasonStanding[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [search, setSearch]       = useState('');
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [search, setSearch]             = useState('');
 
   useEffect(() => {
-    async function load() {
-      try {
-        const q = query(collection(db, 'seasonStandings'), orderBy('rank', 'asc'), limit(100));
-        const snap = await getDocs(q);
-        setStandings(snap.docs.map(d => d.data() as SeasonStanding));
-      } catch { /* empty */ } finally { setLoading(false); }
-    }
-    load();
+    // Real-time — ordered by rating, filter admins client-side
+    const q = query(
+      collection(db, 'participants'),
+      orderBy('rating', 'desc'),
+      limit(200)
+    );
+    const unsub = onSnapshot(q, snap => {
+      setParticipants(
+        snap.docs
+          .map(d => ({ uid: d.id, ...d.data() } as Participant))
+          .filter(p => p.role !== 'admin' && p.role !== 'super_admin')
+      );
+      setLoading(false);
+    }, () => setLoading(false));
+    return () => unsub();
   }, []);
 
-  const filtered = standings.filter(s =>
-    s.participantName.toLowerCase().includes(search.toLowerCase()) ||
-    s.college.toLowerCase().includes(search.toLowerCase())
+  const filtered = participants.filter(p =>
+    !search ||
+    p.fullName.toLowerCase().includes(search.toLowerCase()) ||
+    p.college.toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -35,7 +43,7 @@ export default function Leaderboard() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-10">
           <h1 className="heading-lg mb-3">CWCL Rankings</h1>
-          <p className="text-text-secondary text-sm">Season 2026–27 Overall Leaderboard</p>
+          <p className="text-text-secondary text-sm">Season 2026–27 Overall Leaderboard · updates live</p>
         </div>
 
         {/* Search */}
@@ -58,37 +66,39 @@ export default function Leaderboard() {
                   <th className="text-left px-4 py-3 uppercase tracking-wider text-[10px]">College</th>
                   <th className="text-center px-4 py-3 uppercase tracking-wider text-[10px]">Rating</th>
                   <th className="text-center px-4 py-3 uppercase tracking-wider text-[10px]">Tier</th>
-                  <th className="text-center px-4 py-3 uppercase tracking-wider text-[10px]">Points</th>
-                  <th className="text-center px-4 py-3 uppercase tracking-wider text-[10px]">Wins</th>
+                  <th className="text-center px-4 py-3 uppercase tracking-wider text-[10px]">Contests</th>
+                  <th className="text-center px-4 py-3 uppercase tracking-wider text-[10px]">Badges</th>
                   <th className="text-center px-4 py-3 uppercase tracking-wider text-[10px]">Attendance</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neon-cyan/5">
                 {loading ? (
-                  <tr><td colSpan={8} className="text-center py-12 text-text-secondary">Loading rankings…</td></tr>
+                  <tr><td colSpan={8} className="text-center py-12 text-text-secondary">
+                    <div className="w-6 h-6 rounded-full border-2 border-neon-cyan/20 border-t-neon-cyan animate-spin mx-auto" />
+                  </td></tr>
                 ) : filtered.length === 0 ? (
                   <tr><td colSpan={8} className="text-center py-12 text-text-secondary">
-                    {standings.length === 0 ? 'No results published yet. Check back after the first contest!' : 'No results match your search.'}
+                    {participants.length === 0 ? 'No results published yet. Check back after the first contest!' : 'No results match your search.'}
                   </td></tr>
                 ) : (
-                  filtered.map((s, i) => (
-                    <tr key={s.participantId} className="hover:bg-neon-cyan/5 transition-colors">
+                  filtered.map((p, i) => (
+                    <tr key={p.uid} className="hover:bg-neon-cyan/5 transition-colors">
                       <td className="px-4 py-3">
                         <span className={`font-numbers font-bold text-sm ${
                           i === 0 ? 'text-gold' : i === 1 ? 'text-silver' : i === 2 ? 'text-bronze' : 'text-text-secondary'
                         }`}>
-                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${s.rank}`}
+                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-white font-medium">{s.participantName}</td>
-                      <td className="px-4 py-3 text-text-secondary">{s.college}</td>
-                      <td className="px-4 py-3 text-center font-numbers text-neon-cyan">{s.rating}</td>
+                      <td className="px-4 py-3 text-white font-medium">{p.fullName}</td>
+                      <td className="px-4 py-3 text-text-secondary">{p.college}</td>
+                      <td className="px-4 py-3 text-center font-numbers text-neon-cyan">{p.rating}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className={TIER_CLASS[s.tier] ?? 'tier-beginner'}>{s.tier}</span>
+                        <span className={TIER_CLASS[p.tier] ?? 'tier-beginner'}>{p.tier}</span>
                       </td>
-                      <td className="px-4 py-3 text-center font-numbers text-white">{s.totalLeaguePoints}</td>
-                      <td className="px-4 py-3 text-center font-numbers text-success">{s.wins}</td>
-                      <td className="px-4 py-3 text-center font-numbers text-text-secondary">{s.attendance.toFixed(1)}%</td>
+                      <td className="px-4 py-3 text-center font-numbers text-text-secondary">{p.contestsParticipated}</td>
+                      <td className="px-4 py-3 text-center font-numbers text-text-secondary">{p.badges?.length ?? 0}</td>
+                      <td className="px-4 py-3 text-center font-numbers text-text-secondary">{(p.attendance ?? 0).toFixed(1)}%</td>
                     </tr>
                   ))
                 )}

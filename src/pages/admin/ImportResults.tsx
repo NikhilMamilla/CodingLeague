@@ -1,8 +1,12 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { collection, query, orderBy, getDocs, doc, writeBatch, serverTimestamp } from 'firebase/firestore';
+import {
+  collection, query, orderBy, onSnapshot,
+  doc, writeBatch, getDocs, getDoc, serverTimestamp, increment,
+} from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { Contest } from '../../types';
-import { LEAGUE_POINTS_TABLE, PARTICIPATION_POINTS } from '../../types';
+import { LEAGUE_POINTS_TABLE, PARTICIPATION_POINTS, getTierFromRating } from '../../types';
+import { evaluateAndAwardBadges } from '../../lib/badges';
 import { Upload, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -12,8 +16,6 @@ interface ParsedRow {
   score: number;
   penalty: number;
   solved?: number;
-  matched?: boolean;
-  participantId?: string;
 }
 
 function parseCSV(text: string): ParsedRow[] {
@@ -25,34 +27,43 @@ function parseCSV(text: string): ParsedRow[] {
   const scoreIdx   = headers.findIndex(h => h.includes('score') || h.includes('point'));
   const penaltyIdx = headers.findIndex(h => h.includes('penalty'));
   if (rankIdx < 0 || nameIdx < 0 || scoreIdx < 0 || penaltyIdx < 0) return [];
-
   return lines.slice(1).filter(l => l.trim()).map(l => {
     const cols = l.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
     return {
-      rank:    parseInt(cols[rankIdx])    || 0,
-      name:    cols[nameIdx]              || '',
-      score:   parseFloat(cols[scoreIdx]) || 0,
+      rank:    parseInt(cols[rankIdx])      || 0,
+      name:    cols[nameIdx]                || '',
+      score:   parseFloat(cols[scoreIdx])   || 0,
       penalty: parseFloat(cols[penaltyIdx]) || 0,
       solved:  0,
     };
   }).filter(r => r.rank > 0);
 }
 
+// Simple Elo-style rating delta based on rank and field size
+function calcRatingDelta(rank: number, totalParticipants: number): number {
+  if (rank === 1)  return 50;
+  if (rank <= 3)   return 30;
+  if (rank <= 10)  return 15;
+  if (rank <= Math.ceil(totalParticipants * 0.25)) return 8;
+  if (rank <= Math.ceil(totalParticipants * 0.5))  return 3;
+  if (rank <= Math.ceil(totalParticipants * 0.75)) return -5;
+  return -10;
+}
+
 export default function ImportResults() {
-  const [contests, setContests]   = useState<Contest[]>([]);
-  const [selected, setSelected]   = useState('');
-  const [rows,     setRows]       = useState<ParsedRow[]>([]);
-  const [fileName, setFileName]   = useState('');
+  const [contests,   setContests]   = useState<Contest[]>([]);
+  const [selected,   setSelected]   = useState('');
+  const [rows,       setRows]       = useState<ParsedRow[]>([]);
+  const [fileName,   setFileName]   = useState('');
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    async function load() {
-      const q = query(collection(db, 'contests'), orderBy('date', 'desc'));
-      const snap = await getDocs(q);
+    const q = query(collection(db, 'contests'), orderBy('date', 'desc'));
+    const unsub = onSnapshot(q, snap => {
       setContests(snap.docs.map(d => ({ id: d.id, ...d.data() } as Contest)));
-    }
-    load();
+    });
+    return () => unsub();
   }, []);
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -63,33 +74,54 @@ export default function ImportResults() {
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
       const parsed = parseCSV(text);
-      if (parsed.length === 0) { toast.error('Could not parse file. Ensure it has Rank, Name, Score, Penalty columns.'); return; }
+      if (parsed.length === 0) {
+        toast.error('Could not parse file. Ensure it has Rank, Name, Score, Penalty columns.');
+        return;
+      }
       setRows(parsed);
     };
     reader.readAsText(file);
   }
 
   async function handleImport() {
-    if (!selected) { toast.error('Select a contest first'); return; }
-    if (rows.length === 0) { toast.error('No data to import'); return; }
+    if (!selected)        { toast.error('Select a contest first'); return; }
+    if (rows.length === 0) { toast.error('No data to import');      return; }
     setSubmitting(true);
-    try {
-      const batch = writeBatch(db);
-      // Fetch all participants to match names
-      const partSnap = await getDocs(collection(db, 'participants'));
-      const participants = partSnap.docs.map(d => d.data() as any);
 
+    try {
       const contest = contests.find(c => c.id === selected)!;
 
-      rows.forEach(row => {
-        // Try to match participant by name (case-insensitive)
-        const match = participants.find(p =>
-          p.fullName?.toLowerCase() === row.name.toLowerCase() ||
+      // ── 1. Fetch all participants to match names ──────────────────────────
+      const partSnap  = await getDocs(collection(db, 'participants'));
+      const allParts  = partSnap.docs.map(d => ({ docId: d.id, ...d.data() } as any));
+
+      // Fetch total COMPLETED contests count for accurate attendance calc
+      const contestsSnap = await getDocs(collection(db, 'contests'));
+      const completedContests = contestsSnap.docs.filter(d => d.data().status === 'Completed').length;
+      // +1 because this contest is being marked Completed in this same batch
+      const totalContests = completedContests + 1;
+
+      const totalParticipants = rows.length;
+      const batch = writeBatch(db);
+
+      const matchedUids: string[] = [];
+
+      for (const row of rows) {
+        // Match participant by full name, CF handle, or participantId
+        const match = allParts.find((p: any) =>
+          p.fullName?.toLowerCase()         === row.name.toLowerCase() ||
           p.codeforcesHandle?.toLowerCase() === row.name.toLowerCase() ||
-          p.participantId?.toLowerCase() === row.name.toLowerCase()
+          p.hackerrankUsername?.toLowerCase()=== row.name.toLowerCase() ||
+          p.participantId?.toLowerCase()    === row.name.toLowerCase()
         );
 
-        const lp = LEAGUE_POINTS_TABLE[row.rank] ?? PARTICIPATION_POINTS;
+        const lp          = LEAGUE_POINTS_TABLE[row.rank] ?? PARTICIPATION_POINTS;
+        const ratingBefore = match?.rating ?? 800;
+        const delta        = calcRatingDelta(row.rank, totalParticipants);
+        const ratingAfter  = Math.max(800, ratingBefore + delta);
+        const newTier      = getTierFromRating(ratingAfter);
+
+        // ── Write contest result ──
         const resultRef = doc(collection(db, 'contestResults'));
         batch.set(resultRef, {
           contestId:       selected,
@@ -102,17 +134,58 @@ export default function ImportResults() {
           penalty:         row.penalty,
           problemsSolved:  row.solved ?? 0,
           leaguePoints:    lp,
-          ratingBefore:    match?.rating ?? 800,
-          ratingAfter:     match?.rating ?? 800, // Rating update handled separately
+          ratingBefore,
+          ratingAfter,
           importedAt:      serverTimestamp(),
         });
-      });
+
+        // ── Update participant stats (only for matched participants) ──
+        if (match?.docId) {
+          matchedUids.push(match.docId);
+
+          // Re-fetch to get latest contestsParticipated for accurate attendance
+          const partDocRef  = doc(db, 'participants', match.docId);
+          const partDocSnap = await getDoc(partDocRef);
+          const partData    = partDocSnap.data() as any;
+          const newContestsCount = (partData?.contestsParticipated ?? 0) + 1;
+          const newAttendance    = Math.min(100, Math.round((newContestsCount / totalContests) * 100));
+
+          batch.update(partDocRef, {
+            rating:               ratingAfter,
+            tier:                 newTier,
+            contestsParticipated: increment(1),
+            attendance:           newAttendance,
+          });
+        }
+      }
+
+      // ── Mark contest as Completed ──
+      batch.update(doc(db, 'contests', selected), { status: 'Completed' });
 
       await batch.commit();
-      toast.success(`Imported ${rows.length} results for ${contest.name}!`);
+      toast.success(`✅ Imported ${rows.length} results for ${contest.name}!`);
+
+      // ── 2. Evaluate badges for all matched participants ──────────────────
+      let badgeCount = 0;
+      for (const uid of matchedUids) {
+        try {
+          const awarded = await evaluateAndAwardBadges(uid);
+          badgeCount += awarded.length;
+        } catch { /**/ }
+      }
+
+      if (badgeCount > 0) {
+        toast.success(
+          `🎖️ Awarded ${badgeCount} new badge${badgeCount !== 1 ? 's' : ''}!`,
+          { duration: 4000 }
+        );
+      }
+
       setRows([]);
       setFileName('');
       setSelected('');
+      if (fileRef.current) fileRef.current.value = '';
+
     } catch (e: any) {
       toast.error(e.message ?? 'Import failed');
     } finally {
@@ -121,10 +194,10 @@ export default function ImportResults() {
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="space-y-6">
       <div>
-        <h1 className="heading-md mb-1">Import Results</h1>
-        <p className="text-text-secondary text-xs">Upload a CSV file with contest results. Leaderboards update automatically.</p>
+        <h1 className="heading-md">Import Results</h1>
+        <p className="text-text-secondary text-xs mt-1">Upload a CSV with contest results. Participant stats update automatically.</p>
       </div>
 
       {/* Select Contest */}

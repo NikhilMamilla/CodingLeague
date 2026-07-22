@@ -22,8 +22,11 @@ export interface Participant {
   branch: string;
   city: string;
   state: string;
-  codeforcesHandle: string;
-  leetcodeUsername: string;
+  codeforcesHandle?: string;   // optional — CF not mandatory
+  leetcodeUsername: string;    // mandatory
+  codechefUsername: string;    // mandatory
+  hackerrankUsername: string;  // mandatory
+  gfgUsername?: string;        // optional
   github?: string;
   linkedin?: string;
   photoURL?: string;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  collection, query, orderBy, getDocs,
+  collection, query, orderBy, onSnapshot,
   addDoc, updateDoc, doc, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
@@ -25,15 +25,14 @@ export default function ManageSponsors() {
   const [form,      setForm]      = useState(EMPTY);
   const [saving,    setSaving]    = useState(false);
 
-  async function load() {
-    try {
-      const q = query(collection(db, 'sponsors'), orderBy('tier'));
-      const snap = await getDocs(q);
+  useEffect(() => {
+    const q = query(collection(db, 'sponsors'), orderBy('tier'));
+    const unsub = onSnapshot(q, snap => {
       setSponsors(snap.docs.map(d => ({ id: d.id, ...d.data() } as Sponsor)));
-    } catch { /**/ } finally { setLoading(false); }
-  }
-
-  useEffect(() => { load(); }, []);
+      setLoading(false);
+    }, () => { setLoading(false); });
+    return () => unsub();
+  }, []);
 
   function set(field: string, value: string) { setForm(f => ({ ...f, [field]: value })); }
 
@@ -54,7 +53,7 @@ export default function ManageSponsors() {
       toast.success('Sponsor added!');
       setForm(EMPTY);
       setShowForm(false);
-      load();
+      // onSnapshot handles the list update automatically
     } catch (e: any) { toast.error(e.message); }
     finally { setSaving(false); }
   }
@@ -62,8 +61,8 @@ export default function ManageSponsors() {
   async function toggleActive(s: Sponsor) {
     try {
       await updateDoc(doc(db, 'sponsors', s.id), { isActive: !s.isActive });
-      setSponsors(prev => prev.map(x => x.id === s.id ? { ...x, isActive: !x.isActive } : x));
       toast.success(s.isActive ? 'Sponsor deactivated' : 'Sponsor activated');
+      // onSnapshot will update the list automatically
     } catch (e: any) { toast.error(e.message); }
   }
 

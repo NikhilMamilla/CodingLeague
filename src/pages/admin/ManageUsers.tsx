@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { Participant } from '../../types';
+import { BADGE_META } from '../../types';
 import { Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -12,21 +13,24 @@ const TIER_CLASS: Record<string, string> = {
 
 export default function ManageUsers() {
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [loading, setLoading]           = useState(true);
-  const [search,  setSearch]            = useState('');
+  const [loading, setLoading] = useState(true);
+  const [search,  setSearch]  = useState('');
 
   useEffect(() => {
-    async function load() {
-      try {
-        const q = query(collection(db, 'participants'), orderBy('createdAt', 'desc'));
-        const snap = await getDocs(q);
-        setParticipants(snap.docs.map(d => d.data() as Participant));
-      } catch { /**/ } finally { setLoading(false); }
-    }
-    load();
+    const q = query(collection(db, 'participants'), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q, snap => {
+      setParticipants(
+        snap.docs
+          .map(d => ({ uid: d.id, ...d.data() } as Participant))
+          .filter(p => (p as any).role !== 'admin')
+      );
+      setLoading(false);
+    }, () => setLoading(false));
+    return () => unsub();
   }, []);
 
   const filtered = participants.filter(p =>
+    !search ||
     p.fullName?.toLowerCase().includes(search.toLowerCase()) ||
     p.email?.toLowerCase().includes(search.toLowerCase()) ||
     p.college?.toLowerCase().includes(search.toLowerCase()) ||
@@ -34,57 +38,85 @@ export default function ManageUsers() {
   );
 
   return (
-    <div className="max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="heading-md mb-1">Participants</h1>
-          <p className="text-text-secondary text-xs">{participants.length} registered participants</p>
+          <h1 className="heading-md">Participants</h1>
+          <p className="text-text-secondary text-xs mt-1">
+            {participants.length} registered · updates live
+          </p>
+        </div>
+        <div className="relative w-full sm:w-72">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/50" />
+          <input className="input-field pl-9 py-2 text-xs" placeholder="Search name, email, college, ID…"
+            value={search} onChange={e => setSearch(e.target.value)} />
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/60" />
-        <input className="input-field pl-9" placeholder="Search by name, email, college…"
-          value={search} onChange={e => setSearch(e.target.value)} />
-      </div>
-
-      {/* Table */}
       <div className="card overflow-hidden p-0">
         <div className="overflow-x-auto">
-          <table className="w-full text-xs font-body">
-            <thead className="bg-navy">
-              <tr className="text-text-secondary/70 border-b border-neon-cyan/10">
-                <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider">Participant</th>
-                <th className="text-left px-4 py-3 text-[10px] uppercase tracking-wider">College</th>
-                <th className="text-center px-4 py-3 text-[10px] uppercase tracking-wider">Tier</th>
-                <th className="text-center px-4 py-3 text-[10px] uppercase tracking-wider">Rating</th>
-                <th className="text-center px-4 py-3 text-[10px] uppercase tracking-wider">Contests</th>
-                <th className="text-center px-4 py-3 text-[10px] uppercase tracking-wider">Actions</th>
+          <table className="w-full text-xs font-body min-w-[640px]">
+            <thead className="bg-[#070d1a]">
+              <tr className="border-b border-neon-cyan/10">
+                {['Participant', 'College', 'Branch / Year', 'Tier', 'Rating', 'Contests', 'Badges', 'Actions'].map(h => (
+                  <th key={h} className="text-left px-4 py-3 text-[10px] text-text-secondary/60 uppercase tracking-wider font-medium">{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-neon-cyan/5">
+            <tbody className="divide-y divide-white/5">
               {loading ? (
-                <tr><td colSpan={6} className="text-center py-12 text-text-secondary">Loading…</td></tr>
+                <tr><td colSpan={8} className="text-center py-12 text-text-secondary">
+                  <div className="w-6 h-6 rounded-full border-2 border-neon-cyan/20 border-t-neon-cyan animate-spin mx-auto" />
+                </td></tr>
               ) : filtered.length === 0 ? (
-                <tr><td colSpan={6} className="text-center py-12 text-text-secondary">
+                <tr><td colSpan={8} className="text-center py-12 text-text-secondary">
                   {participants.length === 0 ? 'No participants yet.' : 'No results found.'}
                 </td></tr>
               ) : filtered.map(p => (
                 <tr key={p.uid} className="hover:bg-neon-cyan/5 transition-colors">
                   <td className="px-4 py-3">
-                    <div className="font-medium text-white">{p.fullName}</div>
-                    <div className="text-text-secondary/70 text-[10px] font-numbers">{p.participantId} · {p.email}</div>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center shrink-0 overflow-hidden">
+                        {(p as any).photoURL
+                          ? <img src={(p as any).photoURL} alt="" className="w-full h-full object-cover" />
+                          : <span className="font-heading text-[11px] text-neon-cyan font-bold">
+                              {p.fullName?.charAt(0)?.toUpperCase() ?? '?'}
+                            </span>
+                        }
+                      </div>
+                      <div>
+                        <div className="font-medium text-white">{p.fullName}</div>
+                        <div className="text-text-secondary/60 text-[10px] font-numbers">{p.participantId} · {p.email}</div>
+                      </div>
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-text-secondary">{p.college}</td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-3 text-text-secondary text-xs">{p.college}</td>
+                  <td className="px-4 py-3 text-text-secondary/70 text-xs">{p.branch} · {p.year}</td>
+                  <td className="px-4 py-3">
                     <span className={TIER_CLASS[p.tier] ?? 'tier-beginner'}>{p.tier}</span>
                   </td>
-                  <td className="px-4 py-3 text-center font-numbers text-neon-cyan">{p.rating}</td>
-                  <td className="px-4 py-3 text-center font-numbers text-white">{p.contestsParticipated}</td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-3 font-numbers text-neon-cyan font-bold">{p.rating}</td>
+                  <td className="px-4 py-3 font-numbers text-text-secondary">{p.contestsParticipated}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {p.badges && p.badges.length > 0 ? (
+                        p.badges.map(b => {
+                          const meta = BADGE_META[b.type];
+                          return (
+                            <span key={b.type} title={meta?.label ?? b.type} className="text-sm cursor-default">
+                              {meta?.emoji ?? '🏅'}
+                            </span>
+                          );
+                        })
+                      ) : (
+                        <span className="text-text-secondary/40 text-[10px]">—</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
                     <Link to={`/profile/${p.participantId}`} target="_blank"
-                      className="text-neon-cyan text-[10px] hover:underline">View Profile</Link>
+                      className="text-neon-cyan text-[10px] hover:underline">View →</Link>
                   </td>
                 </tr>
               ))}

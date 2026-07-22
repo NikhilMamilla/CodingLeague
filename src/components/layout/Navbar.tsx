@@ -13,6 +13,7 @@ const NAV_LINKS = [
   { label: 'Leaderboard',  to: '/leaderboard'  },
   { label: 'Winners',      to: '/winners'      },
   { label: 'Hall of Fame', to: '/hall-of-fame' },
+  { label: 'Sponsors',     to: '/sponsors'     },
   { label: 'Gallery',      to: '/gallery'      },
 ];
 

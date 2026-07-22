@@ -40,7 +40,7 @@ export default function HallOfFame() {
           </p>
           <div className="flex items-center justify-center gap-2 text-text-secondary/60 text-xs font-body mb-6">
             <Calendar size={12} />
-            Season runs August 1, 2026 – August 28, 2027 · 48 Contests
+            Season runs August 1, 2026 – August 28, 2027 · 57 Contests
           </div>
           <Link to="/register" className="btn-primary inline-flex items-center gap-2 text-xs px-6">
             <Zap size={13} /> Register Now — Write Your Story

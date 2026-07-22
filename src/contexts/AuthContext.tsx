@@ -6,7 +6,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../lib/firebase';
 import type { Participant, UserRole } from '../types';
 
@@ -15,6 +15,7 @@ interface AuthContextValue {
   participant: Participant | null;
   role: UserRole | null;
   loading: boolean;
+  refreshParticipant: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -28,23 +29,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    let unsubParticipant: (() => void) | null = null;
+
+    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
+
+      // Clean up previous participant listener
+      if (unsubParticipant) {
+        unsubParticipant();
+        unsubParticipant = null;
+      }
+
       if (firebaseUser) {
-        const snap = await getDoc(doc(db, 'participants', firebaseUser.uid));
-        if (snap.exists()) {
-          const data = snap.data() as Participant;
-          setParticipant(data);
-          setRole(data.role);
-        }
+        // Real-time listener on the participant doc — any admin change
+        // (badges, rating, tier) instantly reflects in the logged-in user's state
+        unsubParticipant = onSnapshot(
+          doc(db, 'participants', firebaseUser.uid),
+          (snap) => {
+            if (snap.exists()) {
+              const data = snap.data() as Participant;
+              setParticipant(data);
+              setRole(data.role);
+            } else {
+              setParticipant(null);
+              setRole(null);
+            }
+            setLoading(false);
+          },
+          () => { setLoading(false); }
+        );
       } else {
         setParticipant(null);
         setRole(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
-    return unsubscribe;
+
+    return () => {
+      unsubAuth();
+      if (unsubParticipant) unsubParticipant();
+    };
   }, []);
+
+  // refreshParticipant is now a no-op since we have real-time sync,
+  // but kept for backward compatibility with components that call it
+  async function refreshParticipant() {
+    // Real-time listener handles updates automatically
+  }
 
   async function signInWithGoogle() {
     const provider = new GoogleAuthProvider();
@@ -56,7 +87,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, participant, role, loading, signInWithGoogle, logout }}>
+    <AuthContext.Provider value={{
+      user, participant, role, loading,
+      refreshParticipant, signInWithGoogle, logout,
+    }}>
       {children}
     </AuthContext.Provider>
   );

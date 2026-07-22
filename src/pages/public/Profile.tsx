@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import {
+  collection, query, where, onSnapshot, orderBy, limit,
+} from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { Globe, ExternalLink, Trophy, Star, Award } from 'lucide-react';
 import type { Participant, ContestResult } from '../../types';
@@ -20,30 +22,48 @@ export default function Profile() {
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    async function load() {
-      try {
-        const q = query(
-          collection(db, 'participants'),
-          where('participantId', '==', participantId),
-          limit(1)
-        );
-        const snap = await getDocs(q);
-        if (snap.empty) { setNotFound(true); return; }
+    let unsubProfile: (() => void) | null = null;
+    let unsubResults: (() => void) | null = null;
+
+    // Real-time listener for profile
+    const profileQuery = query(
+      collection(db, 'participants'),
+      where('participantId', '==', participantId),
+      limit(1)
+    );
+    unsubProfile = onSnapshot(
+      profileQuery,
+      (snap) => {
+        if (snap.empty) {
+          setNotFound(true);
+          setLoading(false);
+          return;
+        }
         const data = snap.docs[0].data() as Participant;
         setProfile(data);
 
-        const rq = query(
+        // Real-time listener for results (only if profile found)
+        const resultsQuery = query(
           collection(db, 'contestResults'),
           where('participantId', '==', participantId),
           orderBy('contestId', 'desc'),
           limit(20)
         );
-        const rsnap = await getDocs(rq);
-        setResults(rsnap.docs.map(d => d.data() as ContestResult));
-      } catch { setNotFound(true); }
-      finally { setLoading(false); }
-    }
-    load();
+        unsubResults = onSnapshot(resultsQuery, (rsnap) => {
+          setResults(rsnap.docs.map(d => d.data() as ContestResult));
+          setLoading(false);
+        });
+      },
+      () => {
+        setNotFound(true);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      if (unsubProfile) unsubProfile();
+      if (unsubResults) unsubResults();
+    };
   }, [participantId]);
 
   if (loading) return (
@@ -95,23 +115,26 @@ export default function Profile() {
                 <span className="font-numbers text-white font-bold">{profile.attendance.toFixed(1)}%</span> Attendance
               </span>
             </div>
-            <div className="flex items-center gap-3 mt-3">
+            <div className="flex items-center gap-3 mt-3 flex-wrap">
               {profile.github && (
                 <a href={profile.github} target="_blank" rel="noopener noreferrer"
-                  className="text-text-secondary hover:text-neon-cyan transition-colors">
-                  <Globe size={16} />
+                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
+                  <Globe size={12} /> GitHub
                 </a>
               )}
               {profile.linkedin && (
                 <a href={profile.linkedin} target="_blank" rel="noopener noreferrer"
-                  className="text-text-secondary hover:text-neon-cyan transition-colors">
-                  <ExternalLink size={16} />
+                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
+                  <ExternalLink size={12} /> LinkedIn
                 </a>
               )}
-              <a href={`https://codeforces.com/profile/${profile.codeforcesHandle}`} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
-                <ExternalLink size={12} /> CF: {profile.codeforcesHandle}
-              </a>
+              {profile.codeforcesHandle && (
+                <a href={profile.codeforcesHandle.startsWith('http') ? profile.codeforcesHandle : `https://codeforces.com/profile/${profile.codeforcesHandle}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
+                  <ExternalLink size={12} /> Codeforces
+                </a>
+              )}
             </div>
           </div>
         </div>
@@ -203,7 +226,7 @@ export default function Profile() {
                 <tbody className="divide-y divide-neon-cyan/5">
                   {results.map(r => (
                     <tr key={r.id} className="hover:bg-neon-cyan/5 transition-colors">
-                      <td className="py-3 pr-4 text-white">{r.contestId}</td>
+                      <td className="py-3 pr-4 text-white">{(r as any).contestName ?? r.contestId}</td>
                       <td className="py-3 px-2 text-center font-numbers">
                         <span className={r.rank <= 3 ? ['', 'text-gold', 'text-silver', 'text-bronze'][r.rank] : 'text-text-secondary'}>
                           #{r.rank}

@@ -23,19 +23,25 @@ const Gallery     = lazy(() => import('./pages/public/Gallery'));
 const Login       = lazy(() => import('./pages/auth/Login'));
 const Register    = lazy(() => import('./pages/auth/Register'));
 const Profile     = lazy(() => import('./pages/public/Profile'));
+const Sponsors    = lazy(() => import('./pages/public/Sponsors'));
 
 // Dashboard pages
-const Dashboard      = lazy(() => import('./pages/dashboard/Dashboard'));
-const MyProfile      = lazy(() => import('./pages/dashboard/MyProfile'));
-const MyStats        = lazy(() => import('./pages/dashboard/MyStats'));
-const MyCertificates = lazy(() => import('./pages/dashboard/MyCertificates'));
+const Dashboard           = lazy(() => import('./pages/dashboard/Dashboard'));
+const MyProfile           = lazy(() => import('./pages/dashboard/MyProfile'));
+const MyStats             = lazy(() => import('./pages/dashboard/MyStats'));
+const MyCertificates      = lazy(() => import('./pages/dashboard/MyCertificates'));
+const DashboardLeaderboard = lazy(() => import('./pages/dashboard/DashboardLeaderboard'));
+const Announcements       = lazy(() => import('./pages/dashboard/Announcements'));
 
 // Admin pages
 const AdminDashboard      = lazy(() => import('./pages/admin/AdminDashboard'));
 const ManageContests      = lazy(() => import('./pages/admin/ManageContests'));
 const ImportResults       = lazy(() => import('./pages/admin/ImportResults'));
 const ManageUsers         = lazy(() => import('./pages/admin/ManageUsers'));
+const ManageBadges        = lazy(() => import('./pages/admin/ManageBadges'));
+const ManageSponsors      = lazy(() => import('./pages/admin/ManageSponsors'));
 const ManageAnnouncements = lazy(() => import('./pages/admin/ManageAnnouncements'));
+const SeedContests        = lazy(() => import('./pages/admin/SeedContests'));
 
 function App() {
   return (
@@ -66,6 +72,7 @@ function App() {
               <Route path="rules"                  element={<Rules />}       />
               <Route path="faqs"                   element={<FAQs />}        />
               <Route path="gallery"                element={<Gallery />}     />
+              <Route path="sponsors"               element={<Sponsors />}    />
               <Route path="profile/:participantId" element={<Profile />}     />
             </Route>
 
@@ -76,10 +83,12 @@ function App() {
             {/* Participant Dashboard */}
             <Route element={<ProtectedRoute />}>
               <Route element={<DashboardLayout />}>
-                <Route path="dashboard"                  element={<Dashboard />}      />
-                <Route path="dashboard/profile"          element={<MyProfile />}      />
-                <Route path="dashboard/stats"            element={<MyStats />}        />
-                <Route path="dashboard/certificates"     element={<MyCertificates />} />
+                <Route path="dashboard"                   element={<Dashboard />}             />
+                <Route path="dashboard/leaderboard"       element={<DashboardLeaderboard />}  />
+                <Route path="dashboard/announcements"     element={<Announcements />}         />
+                <Route path="dashboard/profile"           element={<MyProfile />}             />
+                <Route path="dashboard/stats"             element={<MyStats />}               />
+                <Route path="dashboard/certificates"      element={<MyCertificates />}        />
               </Route>
             </Route>
 
@@ -90,7 +99,10 @@ function App() {
                 <Route path="admin/contests"            element={<ManageContests />}      />
                 <Route path="admin/results"             element={<ImportResults />}       />
                 <Route path="admin/users"               element={<ManageUsers />}         />
+                <Route path="admin/badges"              element={<ManageBadges />}        />
+                <Route path="admin/sponsors"            element={<ManageSponsors />}      />
                 <Route path="admin/announcements"       element={<ManageAnnouncements />} />
+                <Route path="admin/seed"                element={<SeedContests />}        />
               </Route>
             </Route>
 

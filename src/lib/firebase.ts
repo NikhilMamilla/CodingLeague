@@ -20,9 +20,7 @@ export const auth    = getAuth(app);
 export const db      = getFirestore(app);
 export const storage = getStorage(app);
 
-// Analytics only loads in browsers that support it (not SSR / older browsers)
+// Analytics only loads in browsers that support it
 export const analyticsPromise = isSupported().then((yes) =>
   yes ? getAnalytics(app) : null
 );
-
-export default app;
