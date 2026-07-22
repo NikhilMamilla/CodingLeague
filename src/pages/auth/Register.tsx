@@ -236,6 +236,9 @@ export default function Register() {
               <div>
                 <label className="input-label">Email Address *</label>
                 <input className="input-field" type="email" placeholder="you@email.com" value={form.email} onChange={e => set('email', e.target.value)} />
+                <p className="text-[10px] text-text-secondary/70 mt-1.5 leading-relaxed">
+                  Please use your college Email ID. This helps keep participation professional and verifiable.
+                </p>
               </div>
               <div>
                 <label className="input-label">Password *</label>

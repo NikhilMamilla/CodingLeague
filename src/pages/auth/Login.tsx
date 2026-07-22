@@ -152,6 +152,9 @@ export default function Login() {
                 onChange={e => setEmail(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleLogin()}
               />
+              <p className="text-[10px] text-text-secondary/70 mt-1.5 leading-relaxed">
+                Please use your college email ID
+              </p>
             </div>
 
             {/* Password */}
