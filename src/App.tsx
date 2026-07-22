@@ -1,51 +1,105 @@
-import React from 'react';
+import { Suspense, lazy } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from './contexts/AuthContext';
+import PublicLayout from './layouts/PublicLayout';
+import DashboardLayout from './layouts/DashboardLayout';
+import AdminLayout from './layouts/AdminLayout';
+import ProtectedRoute from './components/auth/ProtectedRoute';
+import AdminRoute from './components/auth/AdminRoute';
+import PageLoader from './components/ui/PageLoader';
+import ScrollToTop from './components/ui/ScrollToTop';
+
+// Public pages
+const Home        = lazy(() => import('./pages/public/Home'));
+const About       = lazy(() => import('./pages/public/About'));
+const Schedule    = lazy(() => import('./pages/public/Schedule'));
+const Leaderboard = lazy(() => import('./pages/public/Leaderboard'));
+const Winners     = lazy(() => import('./pages/public/Winners'));
+const HallOfFame  = lazy(() => import('./pages/public/HallOfFame'));
+const Rules       = lazy(() => import('./pages/public/Rules'));
+const FAQs        = lazy(() => import('./pages/public/FAQs'));
+const Gallery     = lazy(() => import('./pages/public/Gallery'));
+const Login       = lazy(() => import('./pages/auth/Login'));
+const Register    = lazy(() => import('./pages/auth/Register'));
+const Profile     = lazy(() => import('./pages/public/Profile'));
+
+// Dashboard pages
+const Dashboard      = lazy(() => import('./pages/dashboard/Dashboard'));
+const MyProfile      = lazy(() => import('./pages/dashboard/MyProfile'));
+const MyStats        = lazy(() => import('./pages/dashboard/MyStats'));
+const MyCertificates = lazy(() => import('./pages/dashboard/MyCertificates'));
+
+// Admin pages
+const AdminDashboard      = lazy(() => import('./pages/admin/AdminDashboard'));
+const ManageContests      = lazy(() => import('./pages/admin/ManageContests'));
+const ImportResults       = lazy(() => import('./pages/admin/ImportResults'));
+const ManageUsers         = lazy(() => import('./pages/admin/ManageUsers'));
+const ManageAnnouncements = lazy(() => import('./pages/admin/ManageAnnouncements'));
 
 function App() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-gray-800 mb-6">
-          Welcome to Kiddoo
-        </h1>
-        
-        <div className="space-y-4">
-          <div className="bg-white rounded-lg shadow-md p-6 max-w-md mx-auto">
-            <h2 className="text-xl font-semibold text-gray-700 mb-4">
-              Frontend Status
-            </h2>
-            
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">React:</span>
-                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-                  ✓ Working
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">TypeScript:</span>
-                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-                  ✓ Working
-                </span>
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Tailwind CSS:</span>
-                <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
-                  ✓ Working
-                </span>
-              </div>
-            </div>
-          </div>
-          
-          <p className="text-gray-500 text-sm">
-            Your frontend is ready! 🚀
-          </p>
-        </div>
-      </div>
-    </div>
+    <BrowserRouter>
+      <AuthProvider>
+        <Toaster
+          position="top-right"
+          toastOptions={{
+            style: {
+              background: '#111827',
+              color: '#fff',
+              border: '1px solid rgba(0,229,255,0.2)',
+              fontFamily: 'Inter, sans-serif',
+            },
+          }}
+        />
+        <ScrollToTop />
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            {/* Public */}
+            <Route element={<PublicLayout />}>
+              <Route index                         element={<Home />}        />
+              <Route path="about"                  element={<About />}       />
+              <Route path="schedule"               element={<Schedule />}    />
+              <Route path="leaderboard"            element={<Leaderboard />} />
+              <Route path="winners"                element={<Winners />}     />
+              <Route path="hall-of-fame"           element={<HallOfFame />}  />
+              <Route path="rules"                  element={<Rules />}       />
+              <Route path="faqs"                   element={<FAQs />}        />
+              <Route path="gallery"                element={<Gallery />}     />
+              <Route path="profile/:participantId" element={<Profile />}     />
+            </Route>
+
+            {/* Auth */}
+            <Route path="login"    element={<Login />}    />
+            <Route path="register" element={<Register />} />
+
+            {/* Participant Dashboard */}
+            <Route element={<ProtectedRoute />}>
+              <Route element={<DashboardLayout />}>
+                <Route path="dashboard"                  element={<Dashboard />}      />
+                <Route path="dashboard/profile"          element={<MyProfile />}      />
+                <Route path="dashboard/stats"            element={<MyStats />}        />
+                <Route path="dashboard/certificates"     element={<MyCertificates />} />
+              </Route>
+            </Route>
+
+            {/* Admin */}
+            <Route element={<AdminRoute />}>
+              <Route element={<AdminLayout />}>
+                <Route path="admin"                     element={<AdminDashboard />}      />
+                <Route path="admin/contests"            element={<ManageContests />}      />
+                <Route path="admin/results"             element={<ImportResults />}       />
+                <Route path="admin/users"               element={<ManageUsers />}         />
+                <Route path="admin/announcements"       element={<ManageAnnouncements />} />
+              </Route>
+            </Route>
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 
 export default App;
- 
