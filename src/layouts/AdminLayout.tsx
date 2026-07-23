@@ -3,7 +3,7 @@ import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Calendar, Upload, Users,
   Megaphone, LogOut, Menu, X, Home, ChevronRight,
-  Shield, Database, Handshake, Award,
+  Shield, Database, Handshake, Award, Settings,
 } from 'lucide-react';
 import CBBLogo from '../components/ui/CBBLogo';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,6 +17,7 @@ const LINKS = [
   { to: '/admin/badges',        label: 'Badges',        icon: Shield,          end: false },
   { to: '/admin/sponsors',      label: 'Sponsors',      icon: Handshake,       end: false },
   { to: '/admin/announcements', label: 'Announcements', icon: Megaphone,       end: false },
+  { to: '/admin/community',     label: 'Community',     icon: Settings,        end: false },
   { to: '/admin/seed',          label: 'Seed Schedule', icon: Database,        end: false },
 ];
 
@@ -112,7 +113,7 @@ export default function AdminLayout() {
           <span className="font-heading text-xs text-electric-blue tracking-widest">Admin Panel</span>
         </div>
 
-        <main className="flex-1 overflow-auto">
+        <main id="main-scroll" className="flex-1 overflow-auto">
           <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
             <Outlet />
           </div>

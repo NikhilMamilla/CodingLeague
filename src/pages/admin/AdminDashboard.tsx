@@ -100,7 +100,7 @@ export default function AdminDashboard() {
 
       {/* Stats — real-time */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-        <StatCard icon={Users}     label="Participants"  value={counts.participants}  color="text-neon-cyan"     to="/admin/users text-xs" />
+        <StatCard icon={Users}     label="Participants"  value={counts.participants}  color="text-neon-cyan"     to="/admin/users" />
         <StatCard icon={Calendar}  label="Contests"      value={counts.contests}      color="text-electric-blue" to="/admin/contests"      />
         <StatCard icon={Trophy}    label="Results"       value={counts.results}       color="text-success"       to="/admin/results"       />
         <StatCard icon={Award}     label="Certificates"  value={counts.certificates} color="text-neon-cyan font-bold" to="/admin/certificates" />

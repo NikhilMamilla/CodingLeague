@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, User, BarChart2, Award, LogOut,
-  Menu, X, Home, ChevronRight, TrendingUp, Trophy, Megaphone, BookOpen, Compass,
+  Menu, X, Home, ChevronRight, TrendingUp, Trophy, Megaphone, BookOpen, Compass, Users,
 } from 'lucide-react';
 import CBBLogo from '../components/ui/CBBLogo';
 import { useAuth } from '../contexts/AuthContext';
@@ -12,6 +12,7 @@ const LINKS = [
   { to: '/dashboard/guide',        label: 'CWCL Guide',     icon: Compass,         end: false },
   { to: '/dashboard/leaderboard',  label: 'Leaderboard',    icon: Trophy,          end: false },
   { to: '/dashboard/announcements',label: 'Announcements',  icon: Megaphone,       end: false },
+  { to: '/dashboard/community',    label: 'Community',      icon: Users,           end: false },
   { to: '/dashboard/profile',      label: 'My Profile',     icon: User,            end: false },
   { to: '/dashboard/stats',        label: 'My Stats',       icon: BarChart2,       end: false },
   { to: '/dashboard/certificates', label: 'Certificates',   icon: Award,           end: false },
@@ -191,7 +192,7 @@ export default function DashboardLayout() {
         </div>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto">
+        <main id="main-scroll" className="flex-1 overflow-auto">
           <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto w-full">
             <Outlet />
           </div>

@@ -3,11 +3,11 @@ import { Link } from 'react-router-dom';
 import {
   TrendingUp, Trophy, Calendar, Award, Zap,
   Star, Code2, ExternalLink, User, ChevronRight,
-  Megaphone, Crown, Info,
+  Megaphone, Crown, Info, Users, X, Send,
 } from 'lucide-react';
 import {
   collection, query, where, orderBy, limit,
-  onSnapshot,
+  onSnapshot, doc, getDoc,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -108,6 +108,10 @@ export default function Dashboard() {
   const [loadingContest,  setLoadingContest]  = useState(true);
   const [loadingLeader,   setLoadingLeader]   = useState(true);
   const [myRank,          setMyRank]          = useState<number | null>(null);
+  const [communityBannerDismissed, setCommunityBannerDismissed] = useState(() => {
+    return localStorage.getItem('cwcl_community_banner_dismissed') === 'true';
+  });
+  const [announcementWhatsapp, setAnnouncementWhatsapp] = useState('');
 
   useEffect(() => {
     const unsubs: (() => void)[] = [];
@@ -157,6 +161,14 @@ export default function Dashboard() {
       query(collection(db,'announcements'), orderBy('createdAt','desc'), limit(4)),
       s => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() } as AnnouncementRow)))
     ));
+
+    // Community WhatsApp link
+    getDoc(doc(db, 'settings', 'community')).then(snap => {
+      if (snap.exists()) {
+        const link = snap.data().announcementWhatsapp;
+        if (link) setAnnouncementWhatsapp(link);
+      }
+    }).catch(() => {});
 
     // Recent results — index on (participantId, contestId) is now enabled
     if (participant) {
@@ -227,6 +239,36 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* ── Community Banner ── */}
+      {!communityBannerDismissed && announcementWhatsapp && (
+        <div className="relative bg-card-dark border border-neon-cyan/25 rounded-xl p-4 md:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3 flex-1">
+            <div className="w-9 h-9 rounded-lg bg-neon-cyan/10 border border-neon-cyan/30 flex items-center justify-center shrink-0 mt-0.5">
+              <Users size={16} className="text-neon-cyan" />
+            </div>
+            <div>
+              <p className="text-white text-xs font-semibold">Join our Official CWCL WhatsApp Announcement Community</p>
+              <p className="text-text-secondary text-[11px] mt-0.5">Receive contest updates, results, and important notifications directly.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href={announcementWhatsapp} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-neon-cyan text-midnight font-heading font-bold text-[10px] uppercase tracking-widest hover:shadow-[0_0_15px_rgba(0,229,255,0.4)] transition-all active:scale-95"
+            >
+              <Send size={11} /> Join Now
+            </a>
+            <button
+              onClick={() => { setCommunityBannerDismissed(true); localStorage.setItem('cwcl_community_banner_dismissed', 'true'); }}
+              className="text-text-secondary/50 hover:text-white p-1 transition-colors"
+              aria-label="Dismiss banner"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Stat Grid ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -347,7 +389,7 @@ export default function Dashboard() {
               <p className="text-text-secondary text-sm">No participants yet.</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-[228px] overflow-y-auto no-scrollbar">
               {leaderboard.map((r, i) => {
                 const isMe = r.uid === participant.uid;
                 const emoji = rankEmoji(i + 1);

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, Eye, EyeOff, ArrowLeft, Code2, ExternalLink, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { ChevronRight, Eye, EyeOff, ArrowLeft, Code2, ExternalLink, CheckCircle2, XCircle, Loader2, Send } from 'lucide-react';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { doc, setDoc, collection, query, orderBy, limit, getDocs, getDoc } from 'firebase/firestore';
 import { auth, db } from '../../lib/firebase';
 import { getTierFromRating } from '../../types';
 import CBBLogo from '../../components/ui/CBBLogo';
@@ -114,6 +114,8 @@ export default function Register() {
   const [showPwd,       setShowPwd]       = useState(false);
   const [verifyingMap,  setVerifyingMap]  = useState<Record<string, boolean>>({});
   const [verifyResults, setVerifyResults] = useState<Record<string, VerificationResult>>({});
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [whatsappLink, setWhatsappLink] = useState('');
   const navigate = useNavigate();
 
   function set(field: keyof FormData, value: string | boolean) {
@@ -243,13 +245,22 @@ export default function Register() {
         createdAt: new Date().toISOString(), emailVerified: false,
       });
       toast.success(`Welcome ${form.fullName}! Your ID: ${participantId}`);
-      navigate('/dashboard');
+
+      // Fetch WhatsApp announcement link and show success modal
+      try {
+        const commSnap = await getDoc(doc(db, 'settings', 'community'));
+        if (commSnap.exists()) {
+          const link = commSnap.data().announcementWhatsapp;
+          if (link) setWhatsappLink(link);
+        }
+      } catch { /* ignore */ }
+      setShowSuccessModal(true);
     } catch (err: any) {
       toast.error(err.message ?? 'Registration failed');
     } finally { setLoading(false); }
   }
 
-  return (
+  return (<>
     <div className="min-h-screen bg-midnight bg-grid flex flex-col items-center justify-center px-4 py-8">
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-96 h-96 bg-neon-cyan/5 rounded-full blur-3xl pointer-events-none" />
 
@@ -502,6 +513,43 @@ export default function Register() {
         </p>
       </div>
     </div>
-  );
+
+    {/* ── Post-Registration Success Modal ── */}
+    {showSuccessModal && (
+      <div className="fixed inset-0 z-50 bg-midnight/85 backdrop-blur-sm flex items-center justify-center p-4"
+        onClick={() => { setShowSuccessModal(false); navigate('/dashboard'); }}>
+        <div className="bg-[#0a1628] border border-neon-cyan/25 rounded-2xl w-full max-w-md p-8 text-center"
+          onClick={e => e.stopPropagation()}>
+          <div className="w-16 h-16 rounded-full bg-neon-cyan/10 border-2 border-neon-cyan/40 flex items-center justify-center mx-auto mb-5">
+            <CheckCircle2 size={32} className="text-neon-cyan" />
+          </div>
+          <h2 className="heading-sm mb-2">Registration Successful</h2>
+          <p className="text-text-secondary text-sm leading-relaxed mb-6">
+            Welcome to the CBB Weekly Coding League. To receive contest updates and announcements, join our official WhatsApp Announcement Community.
+          </p>
+          <div className="space-y-3">
+            {whatsappLink && (
+              <a
+                href={whatsappLink} target="_blank" rel="noopener noreferrer"
+                onClick={() => { setTimeout(() => navigate('/dashboard'), 500); }}
+                className="btn-primary w-full flex items-center justify-center gap-2 text-xs"
+              >
+                <Send size={13} /> Join Now
+              </a>
+            )}
+            <button
+              onClick={() => { setShowSuccessModal(false); navigate('/dashboard'); }}
+              className={`w-full text-xs py-3 rounded-lg font-heading font-bold uppercase tracking-widest transition-all ${whatsappLink ? 'btn-secondary' : 'btn-primary'}`}
+            >
+              Go to Dashboard
+            </button>
+          </div>
+          <p className="text-[10px] text-text-secondary/50 mt-4">
+            You can always join later from Dashboard → Community.
+          </p>
+        </div>
+      </div>
+    )}
+  </>);
 }
 

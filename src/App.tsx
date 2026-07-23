@@ -34,6 +34,7 @@ const MyStats             = lazy(() => import('./pages/dashboard/MyStats'));
 const MyCertificates      = lazy(() => import('./pages/dashboard/MyCertificates'));
 const DashboardLeaderboard = lazy(() => import('./pages/dashboard/DashboardLeaderboard'));
 const Announcements       = lazy(() => import('./pages/dashboard/Announcements'));
+const Community           = lazy(() => import('./pages/dashboard/Community'));
 
 // Admin pages
 const AdminDashboard      = lazy(() => import('./pages/admin/AdminDashboard'));
@@ -45,6 +46,7 @@ const ManageBadges        = lazy(() => import('./pages/admin/ManageBadges'));
 const ManageSponsors      = lazy(() => import('./pages/admin/ManageSponsors'));
 const ManageAnnouncements = lazy(() => import('./pages/admin/ManageAnnouncements'));
 const SeedContests        = lazy(() => import('./pages/admin/SeedContests'));
+const CommunitySettings   = lazy(() => import('./pages/admin/CommunitySettings'));
 
 function App() {
   return (
@@ -95,6 +97,7 @@ function App() {
                 <Route path="dashboard/profile"           element={<MyProfile />}             />
                 <Route path="dashboard/stats"             element={<MyStats />}               />
                 <Route path="dashboard/certificates"      element={<MyCertificates />}        />
+                <Route path="dashboard/community"         element={<Community />}             />
               </Route>
             </Route>
 
@@ -110,6 +113,7 @@ function App() {
                 <Route path="admin/sponsors"            element={<ManageSponsors />}      />
                 <Route path="admin/announcements"       element={<ManageAnnouncements />} />
                 <Route path="admin/seed"                element={<SeedContests />}        />
+                <Route path="admin/community"          element={<CommunitySettings />}   />
               </Route>
             </Route>
 
