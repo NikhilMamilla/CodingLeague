@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, Eye, EyeOff, ArrowLeft, Code2, ExternalLink } from 'lucide-react';
+import { ChevronRight, Eye, EyeOff, ArrowLeft, Code2, ExternalLink, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, setDoc, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { auth, db } from '../../lib/firebase';
 import { getTierFromRating } from '../../types';
 import CBBLogo from '../../components/ui/CBBLogo';
 import toast from 'react-hot-toast';
+import { extractHandle, verifyPlatformProfile, type VerificationResult } from '../../lib/profileVerification';
 
 type Step = 1 | 2 | 3;
 
@@ -39,51 +40,43 @@ const INITIAL: FormData = {
 const YEARS    = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
 const BRANCHES = ['CSE', 'IT', 'ECE', 'EEE', 'MECH', 'CIVIL', 'AI&DS', 'AI&ML', 'Other'];
 
-// Platform metadata
-// Users paste their full profile URL (e.g. https://www.hackerrank.com/profile/NikhilMamilla)
 const PLATFORMS = [
   {
     key: 'hackerrankUsername' as keyof FormData,
     label: 'HackerRank',
-    placeholder: 'https://www.hackerrank.com/profile/NikhilMamilla',
+    placeholder: 'https://www.hackerrank.com/profile/NikhilMamilla or username',
     required: true,
     color: '#00EA64',
   },
   {
     key: 'codechefUsername' as keyof FormData,
     label: 'CodeChef',
-    placeholder: 'https://www.codechef.com/users/nikhil_mamilla',
+    placeholder: 'https://www.codechef.com/users/nikhil_mamilla or username',
     required: true,
     color: '#7B4F2E',
   },
   {
     key: 'leetcodeUsername' as keyof FormData,
     label: 'LeetCode',
-    placeholder: 'https://leetcode.com/u/NikhilMamilla',
+    placeholder: 'https://leetcode.com/u/NikhilMamilla or username',
     required: true,
     color: '#FFA116',
   },
   {
     key: 'codeforcesHandle' as keyof FormData,
     label: 'Codeforces',
-    placeholder: 'https://codeforces.com/profile/tourist',
+    placeholder: 'https://codeforces.com/profile/tourist or handle',
     required: false,
     color: '#1890FF',
   },
   {
     key: 'gfgUsername' as keyof FormData,
     label: 'GeeksforGeeks',
-    placeholder: 'https://www.geeksforgeeks.org/user/nikhilmamilla',
+    placeholder: 'https://www.geeksforgeeks.org/user/nikhilmamilla or username',
     required: false,
     color: '#2F8D46',
   },
 ] as const;
-
-/** Validate that the value is a proper https:// URL */
-function isValidUrl(v: string) {
-  try { return new URL(v).protocol === 'https:'; }
-  catch { return false; }
-}
 
 async function generateParticipantId(): Promise<string> {
   try {
@@ -96,7 +89,6 @@ async function generateParticipantId(): Promise<string> {
     if (isNaN(num)) return 'CBB000001';
     return 'CBB' + String(num + 1).padStart(6, '0');
   } catch {
-    // Fallback: use timestamp-based ID if Firestore index is missing
     const ts = Date.now().toString().slice(-6);
     return 'CBB' + ts;
   }
@@ -116,14 +108,45 @@ function StepDot({ n, current }: { n: number; current: number }) {
 }
 
 export default function Register() {
-  const [step,    setStep]    = useState<Step>(1);
-  const [form,    setForm]    = useState<FormData>(INITIAL);
-  const [loading, setLoading] = useState(false);
-  const [showPwd, setShowPwd] = useState(false);
+  const [step,          setStep]          = useState<Step>(1);
+  const [form,          setForm]          = useState<FormData>(INITIAL);
+  const [loading,       setLoading]       = useState(false);
+  const [showPwd,       setShowPwd]       = useState(false);
+  const [verifyingMap,  setVerifyingMap]  = useState<Record<string, boolean>>({});
+  const [verifyResults, setVerifyResults] = useState<Record<string, VerificationResult>>({});
   const navigate = useNavigate();
 
   function set(field: keyof FormData, value: string | boolean) {
     setForm(f => ({ ...f, [field]: value }));
+    // Reset verification result if field value changes
+    if (typeof value === 'string' && verifyResults[field]) {
+      setVerifyResults(prev => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  }
+
+  async function handleVerify(key: string, val: string) {
+    if (!val.trim()) {
+      toast.error('Please enter a handle or profile URL first');
+      return;
+    }
+    setVerifyingMap(prev => ({ ...prev, [key]: true }));
+    try {
+      const res = await verifyPlatformProfile(key, val);
+      setVerifyResults(prev => ({ ...prev, [key]: res }));
+      if (res.success) {
+        toast.success(res.message);
+      } else {
+        toast.error(res.message);
+      }
+    } catch {
+      toast.error('Verification request failed');
+    } finally {
+      setVerifyingMap(prev => ({ ...prev, [key]: false }));
+    }
   }
 
   function validateStep1() {
@@ -142,43 +165,73 @@ export default function Register() {
     return true;
   }
 
-  function validateStep3() {
-    if (!form.hackerrankUsername.trim()) { toast.error('HackerRank profile URL is required');  return false; }
-    if (!isValidUrl(form.hackerrankUsername)) { toast.error('HackerRank: enter a valid https:// URL'); return false; }
-    if (!form.codechefUsername.trim())   { toast.error('CodeChef profile URL is required');    return false; }
-    if (!isValidUrl(form.codechefUsername))   { toast.error('CodeChef: enter a valid https:// URL');   return false; }
-    if (!form.leetcodeUsername.trim())   { toast.error('LeetCode profile URL is required');    return false; }
-    if (!isValidUrl(form.leetcodeUsername))   { toast.error('LeetCode: enter a valid https:// URL');   return false; }
-    // Optional fields — if filled, must be valid URLs
-    if (form.codeforcesHandle.trim() && !isValidUrl(form.codeforcesHandle)) {
-      toast.error('Codeforces: enter a valid https:// URL'); return false;
-    }
-    if (form.gfgUsername.trim() && !isValidUrl(form.gfgUsername)) {
-      toast.error('GeeksforGeeks: enter a valid https:// URL'); return false;
-    }
+  async function validateStep3(): Promise<boolean> {
+    if (!form.hackerrankUsername.trim()) { toast.error('HackerRank handle or URL is required');  return false; }
+    if (!form.codechefUsername.trim())   { toast.error('CodeChef handle or URL is required');    return false; }
+    if (!form.leetcodeUsername.trim())   { toast.error('LeetCode handle or URL is required');    return false; }
+
     if (!form.acceptRules)   { toast.error('Accept the Rules to continue');                 return false; }
     if (!form.acceptPrivacy) { toast.error('Accept the Privacy Policy to continue');        return false; }
-    return true;
+
+    // Check real-time verification for all non-empty fields
+    const toVerify = PLATFORMS.filter(p => (form[p.key] as string).trim());
+    let allValid = true;
+
+    for (const p of toVerify) {
+      const val = form[p.key] as string;
+      let existingRes = verifyResults[p.key];
+
+      if (!existingRes || !existingRes.success) {
+        setVerifyingMap(prev => ({ ...prev, [p.key]: true }));
+        const res = await verifyPlatformProfile(p.key, val);
+        setVerifyResults(prev => ({ ...prev, [p.key]: res }));
+        setVerifyingMap(prev => ({ ...prev, [p.key]: false }));
+
+        if (!res.success) {
+          if (p.required) {
+            toast.error(`Verification failed for ${p.label}: ${res.message}`);
+            allValid = false;
+          }
+        }
+      }
+    }
+
+    return allValid;
   }
 
   async function handleSubmit() {
-    if (!validateStep3()) return;
+    const valid = await validateStep3();
+    if (!valid) return;
     setLoading(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
       await updateProfile(cred.user, { displayName: form.fullName });
       const participantId = await generateParticipantId();
+
+      // Extract clean handles for sync
+      const hrHandle = extractHandle('hackerrankUsername', form.hackerrankUsername);
+      const ccHandle = extractHandle('codechefUsername',   form.codechefUsername);
+      const lcHandle = extractHandle('leetcodeUsername',   form.leetcodeUsername);
+      const cfHandle = form.codeforcesHandle ? extractHandle('codeforcesHandle', form.codeforcesHandle) : null;
+      const gfgHandle= form.gfgUsername      ? extractHandle('gfgUsername',        form.gfgUsername)      : null;
+
       await setDoc(doc(db, 'participants', cred.user.uid), {
         uid: cred.user.uid, participantId,
         fullName: form.fullName, email: form.email, phone: form.phone,
         college: form.college, university: form.university, year: form.year,
         branch: form.branch, city: form.city, state: form.state,
-        // Competitive profiles
-        hackerrankUsername: form.hackerrankUsername,
-        codechefUsername:   form.codechefUsername,
-        leetcodeUsername:   form.leetcodeUsername,
-        codeforcesHandle:   form.codeforcesHandle   || null,
-        gfgUsername:        form.gfgUsername         || null,
+        // Competitive handles stored clean for 100% sync matching
+        hackerrankUsername: hrHandle,
+        codechefUsername:   ccHandle,
+        leetcodeUsername:   lcHandle,
+        codeforcesHandle:   cfHandle,
+        gfgUsername:        gfgHandle,
+        // Raw URLs saved for direct link access
+        hackerrankUrl:      verifyResults['hackerrankUsername']?.formattedUrl || `https://www.hackerrank.com/profile/${hrHandle}`,
+        codechefUrl:        verifyResults['codechefUsername']?.formattedUrl   || `https://www.codechef.com/users/${ccHandle}`,
+        leetcodeUrl:        verifyResults['leetcodeUsername']?.formattedUrl   || `https://leetcode.com/u/${lcHandle}`,
+        codeforcesUrl:      cfHandle ? (verifyResults['codeforcesHandle']?.formattedUrl || `https://codeforces.com/profile/${cfHandle}`) : null,
+        gfgUrl:             gfgHandle ? (verifyResults['gfgUsername']?.formattedUrl || `https://www.geeksforgeeks.org/user/${gfgHandle}`) : null,
         // Social links
         github:   null,
         linkedin: null,
@@ -321,10 +374,7 @@ export default function Register() {
                   Codeforces and GFG are optional.
                 </p>
                 <p className="text-[11px] text-text-secondary/60 leading-relaxed">
-                  Paste your <span className="text-white/70">full profile URL</span> including{' '}
-                  <code className="bg-white/10 px-1 rounded text-neon-cyan/80">https://</code>
-                  {' '}— e.g.{' '}
-                  <span className="text-white/50">https://www.hackerrank.com/profile/NikhilMamilla</span>
+                  Enter your <span className="text-white/70">handle/username</span> or <span className="text-white/70">full profile URL</span>. Click <span className="text-neon-cyan font-semibold">Verify</span> to perform real-time verification.
                 </p>
               </div>
 
@@ -332,11 +382,14 @@ export default function Register() {
               <div className="space-y-3">
                 {PLATFORMS.map(p => {
                   const val = form[p.key] as string;
-                  const validUrl = isValidUrl(val.trim());
+                  const isVerifying = verifyingMap[p.key];
+                  const res = verifyResults[p.key];
+                  const clean = extractHandle(p.key, val);
+
                   return (
-                    <div key={p.key}>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="input-label flex items-center gap-1.5">
+                    <div key={p.key} className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="input-label flex items-center gap-1.5 mb-0">
                           <span
                             className="inline-block w-2 h-2 rounded-full flex-shrink-0"
                             style={{ backgroundColor: p.color }}
@@ -347,23 +400,67 @@ export default function Register() {
                             : <span className="text-text-secondary/50 text-[10px] ml-1">(optional)</span>
                           }
                         </label>
-                        {validUrl && (
-                          <a
-                            href={val.trim()}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[10px] text-neon-cyan/70 hover:text-neon-cyan flex items-center gap-0.5 transition-colors"
-                          >
-                            verify <ExternalLink size={10} />
-                          </a>
+
+                        {val.trim() && (
+                          <div className="flex items-center gap-2">
+                            {res?.formattedUrl && (
+                              <a
+                                href={res.formattedUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-text-secondary hover:text-neon-cyan flex items-center gap-0.5"
+                                title="Open Profile Link"
+                              >
+                                View <ExternalLink size={10} />
+                              </a>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleVerify(p.key, val)}
+                              disabled={isVerifying}
+                              className="px-2 py-0.5 rounded text-[11px] font-semibold bg-neon-cyan/10 hover:bg-neon-cyan/20 border border-neon-cyan/30 text-neon-cyan transition-all flex items-center gap-1 disabled:opacity-50"
+                            >
+                              {isVerifying ? (
+                                <>
+                                  <Loader2 size={10} className="animate-spin" /> Verifying…
+                                </>
+                              ) : res?.success ? (
+                                <>
+                                  <CheckCircle2 size={10} className="text-success" /> Verified
+                                </>
+                              ) : res ? (
+                                <>
+                                  <XCircle size={10} className="text-red-400" /> Re-verify
+                                </>
+                              ) : (
+                                'Verify Real-Time'
+                              )}
+                            </button>
+                          </div>
                         )}
                       </div>
+
                       <input
-                        className="input-field text-xs"
+                        className={`input-field text-xs transition-colors ${
+                          res?.success ? 'border-success/50 bg-success/5' : res ? 'border-red-400/50 bg-red-400/5' : ''
+                        }`}
                         placeholder={p.placeholder}
                         value={val}
                         onChange={e => set(p.key, e.target.value)}
                       />
+
+                      {/* Real-Time verification feedback message */}
+                      {res && (
+                        <div className={`text-[11px] flex items-center gap-1 px-1 ${
+                          res.success ? 'text-success' : 'text-red-400'
+                        }`}>
+                          {res.success ? <CheckCircle2 size={11} /> : <XCircle size={11} />}
+                          <span>{res.message}</span>
+                          {clean && res.success && (
+                            <span className="text-text-secondary/70 text-[10px] ml-1">(Handle: @{clean})</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -392,7 +489,7 @@ export default function Register() {
                 <button onClick={() => setStep(2)} className="btn-secondary flex-1 text-xs">Back</button>
                 <button onClick={handleSubmit} disabled={loading}
                   className="btn-primary flex-1 text-xs disabled:opacity-50">
-                  {loading ? 'Creating…' : 'Create Account'}
+                  {loading ? 'Verifying & Creating…' : 'Create Account'}
                 </button>
               </div>
             </div>
@@ -407,3 +504,4 @@ export default function Register() {
     </div>
   );
 }
+

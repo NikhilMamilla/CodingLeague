@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, User, BarChart2, Award, LogOut,
-  Menu, X, Home, ChevronRight, TrendingUp, Trophy, Megaphone,
+  Menu, X, Home, ChevronRight, TrendingUp, Trophy, Megaphone, BookOpen,
 } from 'lucide-react';
 import CBBLogo from '../components/ui/CBBLogo';
 import { useAuth } from '../contexts/AuthContext';
@@ -14,6 +14,7 @@ const LINKS = [
   { to: '/dashboard/profile',      label: 'My Profile',     icon: User,            end: false },
   { to: '/dashboard/stats',        label: 'My Stats',       icon: BarChart2,       end: false },
   { to: '/dashboard/certificates', label: 'Certificates',   icon: Award,           end: false },
+  { to: '/rules',                  label: 'Rules',          icon: BookOpen,        end: false },
 ];
 
 const TIER_CLASS: Record<string, string> = {

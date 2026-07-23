@@ -10,6 +10,8 @@ import { evaluateAndAwardBadges } from '../../lib/badges';
 import { Upload, FileText, AlertCircle, CheckCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+import { extractHandle } from '../../lib/profileVerification';
+
 interface ParsedRow {
   rank: number;
   name: string;
@@ -107,13 +109,33 @@ export default function ImportResults() {
       const matchedUids: string[] = [];
 
       for (const row of rows) {
-        // Match participant by full name, CF handle, or participantId
-        const match = allParts.find((p: any) =>
-          p.fullName?.toLowerCase()         === row.name.toLowerCase() ||
-          p.codeforcesHandle?.toLowerCase() === row.name.toLowerCase() ||
-          p.hackerrankUsername?.toLowerCase()=== row.name.toLowerCase() ||
-          p.participantId?.toLowerCase()    === row.name.toLowerCase()
-        );
+        const rawTarget = row.name.trim().toLowerCase();
+        const targetCleanHandle = extractHandle('generic', row.name).toLowerCase();
+
+        // Robust match by full name, participantId, or clean handles across all platforms
+        const match = allParts.find((p: any) => {
+          if (p.fullName?.toLowerCase() === rawTarget) return true;
+          if (p.participantId?.toLowerCase() === rawTarget) return true;
+
+          const cfHandle = p.codeforcesHandle ? extractHandle('codeforcesHandle', p.codeforcesHandle).toLowerCase() : '';
+          const lcHandle = p.leetcodeUsername ? extractHandle('leetcodeUsername', p.leetcodeUsername).toLowerCase() : '';
+          const ccHandle = p.codechefUsername ? extractHandle('codechefUsername', p.codechefUsername).toLowerCase() : '';
+          const hrHandle = p.hackerrankUsername ? extractHandle('hackerrankUsername', p.hackerrankUsername).toLowerCase() : '';
+          const gfgHandle = p.gfgUsername ? extractHandle('gfgUsername', p.gfgUsername).toLowerCase() : '';
+
+          return (
+            cfHandle === rawTarget || cfHandle === targetCleanHandle ||
+            lcHandle === rawTarget || lcHandle === targetCleanHandle ||
+            ccHandle === rawTarget || ccHandle === targetCleanHandle ||
+            hrHandle === rawTarget || hrHandle === targetCleanHandle ||
+            gfgHandle === rawTarget || gfgHandle === targetCleanHandle ||
+            p.codeforcesHandle?.toLowerCase() === rawTarget ||
+            p.leetcodeUsername?.toLowerCase() === rawTarget ||
+            p.codechefUsername?.toLowerCase() === rawTarget ||
+            p.hackerrankUsername?.toLowerCase() === rawTarget ||
+            p.gfgUsername?.toLowerCase() === rawTarget
+          );
+        });
 
         const lp          = LEAGUE_POINTS_TABLE[row.rank] ?? PARTICIPATION_POINTS;
         const ratingBefore = match?.rating ?? 800;

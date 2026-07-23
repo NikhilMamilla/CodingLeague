@@ -9,6 +9,8 @@ import type { Participant, ContestResult } from '../../types';
 import { BADGE_META } from '../../types';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
+import { getCanonicalProfileUrl } from '../../lib/profileVerification';
+
 const TIER_CLASS: Record<string, string> = {
   Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
   Expert: 'tier-expert', Master: 'tier-master', Grandmaster: 'tier-grandmaster',
@@ -128,11 +130,39 @@ export default function Profile() {
                   <ExternalLink size={12} /> LinkedIn
                 </a>
               )}
-              {profile.codeforcesHandle && (
-                <a href={profile.codeforcesHandle.startsWith('http') ? profile.codeforcesHandle : `https://codeforces.com/profile/${profile.codeforcesHandle}`}
+              {profile.leetcodeUsername && (
+                <a href={getCanonicalProfileUrl('leetcodeUsername', profile.leetcodeUsername)}
                   target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
-                  <ExternalLink size={12} /> Codeforces
+                  <ExternalLink size={12} /> LeetCode (@{profile.leetcodeUsername})
+                </a>
+              )}
+              {profile.codechefUsername && (
+                <a href={getCanonicalProfileUrl('codechefUsername', profile.codechefUsername)}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
+                  <ExternalLink size={12} /> CodeChef (@{profile.codechefUsername})
+                </a>
+              )}
+              {profile.hackerrankUsername && (
+                <a href={getCanonicalProfileUrl('hackerrankUsername', profile.hackerrankUsername)}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
+                  <ExternalLink size={12} /> HackerRank (@{profile.hackerrankUsername})
+                </a>
+              )}
+              {profile.codeforcesHandle && (
+                <a href={getCanonicalProfileUrl('codeforcesHandle', profile.codeforcesHandle)}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
+                  <ExternalLink size={12} /> Codeforces (@{profile.codeforcesHandle})
+                </a>
+              )}
+              {profile.gfgUsername && (
+                <a href={getCanonicalProfileUrl('gfgUsername', profile.gfgUsername)}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
+                  <ExternalLink size={12} /> GeeksforGeeks (@{profile.gfgUsername})
                 </a>
               )}
             </div>

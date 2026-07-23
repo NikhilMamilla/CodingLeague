@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   TrendingUp, Trophy, Calendar, Award, Zap,
   Star, Code2, ExternalLink, User, ChevronRight,
-  Megaphone, Crown,
+  Megaphone, Crown, Info,
 } from 'lucide-react';
 import {
   collection, query, where, orderBy, limit,
@@ -31,16 +31,28 @@ const PLATFORM_CFG = [
   { key: 'gfgUsername',        label: 'GeeksforGeeks', color: '#2F8D46' },
 ] as const;
 
-function StatCard({ icon: Icon, label, value, color = 'text-neon-cyan' }: {
-  icon: React.ElementType; label: string; value: string | number; color?: string;
+function StatCard({ icon: Icon, label, value, color = 'text-neon-cyan', infoText }: {
+  icon: React.ElementType; label: string; value: string | number; color?: string; infoText?: string;
 }) {
   return (
     <div className="card flex items-center gap-4 py-4">
       <div className="w-10 h-10 rounded-lg bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center shrink-0">
         <Icon size={17} className={color} />
       </div>
-      <div className="min-w-0">
-        <div className="text-text-secondary text-[10px] uppercase tracking-widest">{label}</div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <div className="text-text-secondary text-[10px] uppercase tracking-widest">{label}</div>
+          {infoText && (
+            <button
+              type="button"
+              aria-label={`More info about ${label}`}
+              title={infoText}
+              className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-neon-cyan/30 text-[10px] text-neon-cyan/80 hover:bg-neon-cyan/10 transition-colors"
+            >
+              <Info size={10} />
+            </button>
+          )}
+        </div>
         <div className={`stat-number text-xl ${color}`}>{value}</div>
       </div>
     </div>
@@ -85,7 +97,8 @@ function rankEmoji(n: number) {
 
 export default function Dashboard() {
   const { participant } = useAuth();
-  const [upcomingContest, setUpcomingContest] = useState<Contest | null>(null);
+  const [activeContest,    setActiveContest]   = useState<Contest | null>(null);
+  const [upcomingContest,  setUpcomingContest] = useState<Contest | null>(null);
   const [recentResults,   setRecentResults]   = useState<ContestResult[]>([]);
   const [leaderboard,     setLeaderboard]     = useState<LeaderRow[]>([]);
   const [announcements,   setAnnouncements]   = useState<AnnouncementRow[]>([]);
@@ -96,9 +109,18 @@ export default function Dashboard() {
   useEffect(() => {
     const unsubs: (() => void)[] = [];
 
-    // Upcoming contest — index on (status, date) is now enabled
+    // Active live contest
     unsubs.push(onSnapshot(
-      query(collection(db,'contests'), where('status','==','Upcoming'), orderBy('date','asc'), limit(1)),
+      query(collection(db, 'contests'), where('status', '==', 'Active'), limit(1)),
+      s => {
+        setActiveContest(s.empty ? null : { id: s.docs[0].id, ...s.docs[0].data() } as Contest);
+        setLoadingContest(false);
+      }
+    ));
+
+    // Upcoming contest
+    unsubs.push(onSnapshot(
+      query(collection(db, 'contests'), where('status', '==', 'Upcoming'), orderBy('date', 'asc'), limit(1)),
       s => {
         setUpcomingContest(s.empty ? null : { id: s.docs[0].id, ...s.docs[0].data() } as Contest);
         setLoadingContest(false);
@@ -205,7 +227,13 @@ export default function Dashboard() {
 
       {/* ── Stat Grid ── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={TrendingUp} label="Rating"     value={participant.rating}                          color="text-neon-cyan"      />
+        <StatCard
+          icon={TrendingUp}
+          label="Rating"
+          value={participant.rating}
+          color="text-neon-cyan"
+          infoText="Your rating starts at 800 when you join CWCL. It changes after each contest based on your performance."
+        />
         <StatCard icon={Trophy}     label="Contests"   value={participant.contestsParticipated}            color="text-electric-blue"  />
         <StatCard icon={Award}      label="Badges"     value={participant.badges?.length ?? 0}             color="text-gold"           />
         <StatCard icon={Crown}      label="My Rank"    value={myRank ? `#${myRank}` : '—'}                color="text-success"        />

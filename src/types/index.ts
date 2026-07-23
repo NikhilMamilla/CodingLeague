@@ -211,19 +211,33 @@ export interface Announcement {
 // ─── Certificate ──────────────────────────────────────────────────────────────
 
 export type CertificateType =
-  | 'participation'
-  | 'winner'
-  | 'monthly_champion'
-  | 'annual_champion';
+  | 'Participation'
+  | 'Winner'
+  | 'Monthly Champion';
+
+export type CertificateStatus = 'Pending' | 'Issued';
 
 export interface Certificate {
   id: string;
+  certificateId: string;
   participantId: string;
-  type: CertificateType;
-  contestId?: string;
-  month?: string;
-  seasonId?: string;
-  pdfURL: string;
-  verificationCode: string;
-  issuedAt: string;
+  participantName: string;
+  email: string;
+  certificateType: CertificateType | string;
+  contestName: string;
+  season: string;
+  position?: string;
+  issuedDate: string;
+  cloudinaryUrl: string;
+  cloudinaryPublicId: string;
+  status: CertificateStatus;
+  issuedBy: string;
+  templateId?: string;
+  createdAt?: string;
+
+  // Legacy fallback compatibility
+  type?: CertificateType | string;
+  pdfURL?: string;
+  verificationCode?: string;
+  issuedAt?: string;
 }

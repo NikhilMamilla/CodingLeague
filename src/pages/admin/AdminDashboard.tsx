@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users, Calendar, Trophy, Megaphone, Upload,
-  Clock, AlertCircle, ChevronRight, Shield, Handshake,
+  Clock, AlertCircle, ChevronRight, Shield, Handshake, Award,
 } from 'lucide-react';
 import {
   collection, query, orderBy, onSnapshot, limit,
@@ -11,7 +11,7 @@ import { db } from '../../lib/firebase';
 import type { Contest, Announcement, Participant } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
 
-interface Counts { participants: number; contests: number; results: number; announcements: number; badges: number; }
+interface Counts { participants: number; contests: number; results: number; announcements: number; badges: number; certificates: number; }
 
 function StatCard({ icon: Icon, label, value, color = 'text-neon-cyan', to }: {
   icon: React.ElementType; label: string; value: number;
@@ -39,7 +39,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 export default function AdminDashboard() {
   const { participant } = useAuth();
-  const [counts,        setCounts]        = useState<Counts>({ participants: 0, contests: 0, results: 0, announcements: 0, badges: 0 });
+  const [counts,        setCounts]        = useState<Counts>({ participants: 0, contests: 0, results: 0, announcements: 0, badges: 0, certificates: 0 });
   const [contests,      setContests]      = useState<Contest[]>([]);
   const [recent,        setRecent]        = useState<Participant[]>([]);
   const [announcements, setAnnouncements] = useState<(Announcement & { id: string })[]>([]);
@@ -55,6 +55,7 @@ export default function AdminDashboard() {
       onSnapshot(collection(db, 'contests'),       s => setCounts(c => ({ ...c, contests: s.size }))),
       onSnapshot(collection(db, 'contestResults'), s => setCounts(c => ({ ...c, results: s.size }))),
       onSnapshot(collection(db, 'announcements'),  s => setCounts(c => ({ ...c, announcements: s.size }))),
+      onSnapshot(collection(db, 'certificates'),   s => setCounts(c => ({ ...c, certificates: s.size }))),
       // Live lists
       onSnapshot(
         query(collection(db, 'contests'), orderBy('date', 'asc'), limit(5)),
@@ -88,32 +89,33 @@ export default function AdminDashboard() {
           </p>
         </div>
         <div className="flex gap-3 flex-wrap">
-          <Link to="/admin/contests" className="btn-primary text-xs px-4 py-2 flex items-center gap-2">
-            <Calendar size={12} /> New Contest
+          <Link to="/admin/certificates" className="btn-primary text-xs px-4 py-2 flex items-center gap-2">
+            <Award size={12} /> Manage Certificates
           </Link>
-          <Link to="/admin/announcements" className="btn-secondary text-xs px-4 py-2 flex items-center gap-2">
-            <Megaphone size={12} /> Announce
+          <Link to="/admin/contests" className="btn-secondary text-xs px-4 py-2 flex items-center gap-2">
+            <Calendar size={12} /> New Contest
           </Link>
         </div>
       </div>
 
       {/* Stats — real-time */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <StatCard icon={Users}     label="Participants"  value={counts.participants}  color="text-neon-cyan"     to="/admin/users"         />
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+        <StatCard icon={Users}     label="Participants"  value={counts.participants}  color="text-neon-cyan"     to="/admin/users text-xs" />
         <StatCard icon={Calendar}  label="Contests"      value={counts.contests}      color="text-electric-blue" to="/admin/contests"      />
         <StatCard icon={Trophy}    label="Results"       value={counts.results}       color="text-success"       to="/admin/results"       />
-        <StatCard icon={Shield}    label="Badges Earned" value={counts.badges}        color="text-gold"          to="/admin/badges"        />
+        <StatCard icon={Award}     label="Certificates"  value={counts.certificates} color="text-neon-cyan font-bold" to="/admin/certificates" />
+        <StatCard icon={Shield}    label="Badges"        value={counts.badges}        color="text-gold"          to="/admin/badges"        />
         <StatCard icon={Megaphone} label="Announcements" value={counts.announcements} color="text-warning"       to="/admin/announcements" />
       </div>
 
       {/* Quick Actions */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
+          { icon: Award,     label: 'Certificates System', desc: 'Generate & issue official certificates', to: '/admin/certificates' },
           { icon: Calendar,  label: 'Create Contest',      desc: 'Schedule a new weekly contest',       to: '/admin/contests'      },
           { icon: Upload,    label: 'Import Results',      desc: 'Upload CSV results for a contest',    to: '/admin/results'       },
           { icon: Users,     label: 'Manage Participants', desc: 'View and manage all registrations',   to: '/admin/users'         },
           { icon: Shield,    label: 'Manage Badges',       desc: 'Award, revoke and auto-evaluate',     to: '/admin/badges'        },
-          { icon: Handshake, label: 'Sponsors',            desc: 'Add or toggle sponsor listings',      to: '/admin/sponsors'      },
           { icon: Megaphone, label: 'Post Announcement',   desc: 'Send a notice to all participants',   to: '/admin/announcements' },
         ].map(({ icon: Icon, label, desc, to }) => (
           <Link key={to} to={to}

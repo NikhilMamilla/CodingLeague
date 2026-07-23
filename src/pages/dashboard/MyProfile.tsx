@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { BADGE_META } from '../../types';
+import { extractHandle, getCanonicalProfileUrl } from '../../lib/profileVerification';
 
 const TIER_CLASS: Record<string, string> = {
   Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
@@ -67,8 +68,6 @@ export default function MyProfile() {
   const [saving,    setSaving]    = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Re-sync local state when AuthContext pushes a real-time update
-  // (e.g. admin modifies participant data)
   useEffect(() => {
     if (!participant) return;
     setBio(participant.bio ?? '');
@@ -102,31 +101,34 @@ export default function MyProfile() {
   }
 
   async function handleSave() {
-    // Validate competitive profile URLs
-    for (const p of PLATFORM_CFG) {
-      const v = profiles[p.key];
-      if (v.trim() && !isValidUrl(v)) {
-        toast.error(`${p.label}: enter a valid https:// URL`); return;
-      }
-    }
-    // Validate social links
-    if (github.trim()   && !isValidUrl(github))   { toast.error('GitHub: enter a valid https:// URL');   return; }
-    if (linkedin.trim() && !isValidUrl(linkedin))  { toast.error('LinkedIn: enter a valid https:// URL'); return; }
-
     setSaving(true);
     try {
+      if (github.trim()   && !isValidUrl(github))   { toast.error('GitHub: enter a valid https:// URL');   setSaving(false); return; }
+      if (linkedin.trim() && !isValidUrl(linkedin))  { toast.error('LinkedIn: enter a valid https:// URL'); setSaving(false); return; }
+
+      const hrHandle = profiles.hackerrankUsername ? extractHandle('hackerrankUsername', profiles.hackerrankUsername) : null;
+      const ccHandle = profiles.codechefUsername   ? extractHandle('codechefUsername',   profiles.codechefUsername)   : null;
+      const lcHandle = profiles.leetcodeUsername   ? extractHandle('leetcodeUsername',   profiles.leetcodeUsername)   : null;
+      const cfHandle = profiles.codeforcesHandle   ? extractHandle('codeforcesHandle',   profiles.codeforcesHandle)   : null;
+      const gfgHandle= profiles.gfgUsername        ? extractHandle('gfgUsername',        profiles.gfgUsername)        : null;
+
       await updateDoc(doc(db, 'participants', user!.uid), {
         bio,
         github:             github   || null,
         linkedin:           linkedin || null,
-        hackerrankUsername: profiles.hackerrankUsername || null,
-        codechefUsername:   profiles.codechefUsername   || null,
-        leetcodeUsername:   profiles.leetcodeUsername   || null,
-        codeforcesHandle:   profiles.codeforcesHandle   || null,
-        gfgUsername:        profiles.gfgUsername        || null,
+        hackerrankUsername: hrHandle,
+        codechefUsername:   ccHandle,
+        leetcodeUsername:   lcHandle,
+        codeforcesHandle:   cfHandle,
+        gfgUsername:        gfgHandle,
+        hackerrankUrl:      hrHandle ? getCanonicalProfileUrl('hackerrankUsername', hrHandle) : null,
+        codechefUrl:        ccHandle ? getCanonicalProfileUrl('codechefUsername', ccHandle)   : null,
+        leetcodeUrl:        lcHandle ? getCanonicalProfileUrl('leetcodeUsername', lcHandle)   : null,
+        codeforcesUrl:      cfHandle ? getCanonicalProfileUrl('codeforcesHandle', cfHandle)   : null,
+        gfgUrl:             gfgHandle ? getCanonicalProfileUrl('gfgUsername', gfgHandle)     : null,
       });
       await refreshParticipant();
-      toast.success('Profile saved!');
+      toast.success('Profile saved with verified handles!');
     } catch { toast.error('Save failed'); }
     finally { setSaving(false); }
   }
@@ -203,15 +205,15 @@ export default function MyProfile() {
         <Card title="Badges Earned" icon={Shield}>
           {participant.badges?.length > 0 ? (
             <div className="grid grid-cols-3 gap-3">
-              {participant.badges.map(b => {
-                const meta = BADGE_META[b.type];
-                if (!meta) return null;
+              {participant.badges.map((b: any) => {
+                const badgeKey = (b.type || b.id || b.name) as keyof typeof BADGE_META;
+                const meta = BADGE_META[badgeKey];
                 return (
-                  <div key={b.type}
-                    title={`${meta.label} — Earned ${b.awardedAt ? new Date(b.awardedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}`}
+                  <div key={b.type || b.id}
+                    title={`${meta?.label || b.name} — Earned ${b.awardedAt ? new Date(b.awardedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}`}
                     className="flex flex-col items-center gap-1.5 p-3 rounded-xl bg-midnight border border-neon-cyan/10 hover:border-neon-cyan/30 transition-colors cursor-default">
-                    <span className="text-2xl">{meta.emoji}</span>
-                    <span className="text-[9px] text-text-secondary text-center leading-tight">{meta.label}</span>
+                    <span className="text-2xl">{meta?.emoji || '🏅'}</span>
+                    <span className="text-[9px] text-text-secondary text-center leading-tight">{meta?.label || b.name}</span>
                     <span className="text-[8px] text-neon-cyan/50">✓ earned</span>
                   </div>
                 );
@@ -260,71 +262,66 @@ export default function MyProfile() {
           </p>
         </Card>
 
-        <Card title="About Me" icon={User}>
-          <p className="text-text-secondary/60 text-[11px] -mt-1">
-            Write a short bio that appears on your public profile.
-          </p>
-          <textarea
-            className="input-field resize-none text-sm"
-            style={{ height: '8rem' }}
-            placeholder="Tell others about yourself — interests, favourite algorithms, goals…"
-            value={bio}
-            onChange={e => setBio(e.target.value)}
-            maxLength={300}
-          />
-          <span className="text-[10px] text-text-secondary/40">{bio.length}/300 characters</span>
+        <Card title="About Me & Social Links" icon={User}>
+          <div className="space-y-4">
+            <div>
+              <label className="input-label">Short Bio</label>
+              <textarea
+                className="input-field min-h-[80px] resize-none text-xs"
+                placeholder="Tell fellow coders about your coding journey…"
+                value={bio}
+                onChange={e => setBio(e.target.value)}
+                maxLength={300}
+              />
+              <span className="text-[10px] text-text-secondary/40">{bio.length}/300 characters</span>
+            </div>
 
-          {/* Social links */}
-          <div className="pt-2 border-t border-white/5 space-y-3">
-            <p className="text-[10px] text-text-secondary/60 uppercase tracking-wider">Social Links (optional)</p>
-            <div>
-              <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
-                <Link size={10} /> GitHub
-              </label>
-              <input
-                className="input-field text-xs"
-                placeholder="https://github.com/YourUsername"
-                value={github}
-                onChange={e => setGithub(e.target.value)}
-              />
+            <div className="space-y-3 pt-2 border-t border-white/5">
+              <div>
+                <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
+                  <Link size={10} /> GitHub
+                </label>
+                <input
+                  className="input-field text-xs"
+                  placeholder="https://github.com/YourUsername"
+                  value={github}
+                  onChange={e => setGithub(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
+                  <Link size={10} /> LinkedIn
+                </label>
+                <input
+                  className="input-field text-xs"
+                  placeholder="https://linkedin.com/in/YourProfile"
+                  value={linkedin}
+                  onChange={e => setLinkedin(e.target.value)}
+                />
+              </div>
             </div>
-            <div>
-              <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
-                <Link size={10} /> LinkedIn
-              </label>
-              <input
-                className="input-field text-xs"
-                placeholder="https://linkedin.com/in/YourProfile"
-                value={linkedin}
-                onChange={e => setLinkedin(e.target.value)}
-              />
-            </div>
+
+            <button onClick={handleSave} disabled={saving}
+              className="btn-primary w-full text-xs px-4 py-2.5 flex items-center justify-center gap-1.5 disabled:opacity-50 mt-2">
+              <Save size={13} />
+              {saving ? 'Saving…' : 'Save Bio & Social Links'}
+            </button>
           </div>
-
-          <button onClick={handleSave} disabled={saving}
-            className="btn-primary w-full text-xs px-4 py-2 flex items-center justify-center gap-1.5 disabled:opacity-50">
-            <Save size={12} />
-            {saving ? 'Saving…' : 'Save Bio & Social Links'}
-          </button>
         </Card>
       </div>
 
       {/* ── ROW 3: Competitive Profiles ── */}
-      <Card title="Competitive Profiles" icon={Code2}>
+      <Card title="Competitive Profiles & Handles" icon={Code2}>
         <div className="flex items-center justify-between -mt-1 mb-1">
           <p className="text-[11px] text-text-secondary/60">
-            Paste your full profile URL including{' '}
-            <code className="bg-white/10 px-1 rounded text-neon-cyan/80 text-[10px]">https://</code>
+            Enter your handle/username or full URL. Handles are auto-extracted & verified for 100% contest syncing.
           </p>
-          <span className="text-[10px] text-text-secondary shrink-0">
-            {PLATFORM_CFG.filter(p => isValidUrl(profiles[p.key] ?? '')).length}/{PLATFORM_CFG.length} linked
-          </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {PLATFORM_CFG.slice(0, 4).map(p => {
-            const val   = profiles[p.key] ?? '';
-            const valid = isValidUrl(val.trim());
+            const val = profiles[p.key] ?? '';
+            const handle = extractHandle(p.key, val);
             return (
               <div key={p.key} className="rounded-xl border border-white/8 p-4 transition-all hover:border-neon-cyan/20"
                 style={{ background: p.bg }}>
@@ -334,10 +331,10 @@ export default function MyProfile() {
                     <span className="text-sm font-heading font-bold" style={{ color: p.color }}>{p.label}</span>
                     {p.required && <span className="text-red-400 text-xs">*</span>}
                   </div>
-                  {valid ? (
-                    <a href={val.trim()} target="_blank" rel="noopener noreferrer"
+                  {handle ? (
+                    <a href={getCanonicalProfileUrl(p.key, handle)} target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-1 text-[10px] text-neon-cyan hover:text-white transition-colors">
-                      Open <ExternalLink size={9} />
+                      @{handle} <ExternalLink size={9} />
                     </a>
                   ) : (
                     <span className="text-[10px] text-text-secondary/40">not linked</span>
@@ -347,7 +344,7 @@ export default function MyProfile() {
                   className="w-full bg-midnight/60 border border-white/10 text-white rounded-lg px-3 py-2.5 text-xs
                              placeholder-text-secondary/40 outline-none transition-all
                              focus:border-neon-cyan/40 focus:shadow-[0_0_8px_rgba(0,229,255,0.1)]"
-                  placeholder="https://..."
+                  placeholder="Enter handle or profile URL"
                   value={val}
                   onChange={e => setProfiles(prev => ({ ...prev, [p.key]: e.target.value }))}
                 />
@@ -358,9 +355,9 @@ export default function MyProfile() {
 
         {/* GFG — full row */}
         {(() => {
-          const p   = PLATFORM_CFG[4];
-          const val   = profiles[p.key] ?? '';
-          const valid = isValidUrl(val.trim());
+          const p = PLATFORM_CFG[4];
+          const val = profiles[p.key] ?? '';
+          const handle = extractHandle(p.key, val);
           return (
             <div className="rounded-xl border border-white/8 p-4 transition-all hover:border-neon-cyan/20 mt-4"
               style={{ background: p.bg }}>
@@ -370,10 +367,10 @@ export default function MyProfile() {
                   <span className="text-sm font-heading font-bold" style={{ color: p.color }}>{p.label}</span>
                   <span className="text-text-secondary/50 text-[10px]">(optional)</span>
                 </div>
-                {valid ? (
-                  <a href={val.trim()} target="_blank" rel="noopener noreferrer"
+                {handle ? (
+                  <a href={getCanonicalProfileUrl(p.key, handle)} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-1 text-[10px] text-neon-cyan hover:text-white transition-colors">
-                    Open <ExternalLink size={9} />
+                    @{handle} <ExternalLink size={9} />
                   </a>
                 ) : (
                   <span className="text-[10px] text-text-secondary/40">not linked</span>
@@ -383,7 +380,7 @@ export default function MyProfile() {
                 className="w-full bg-midnight/60 border border-white/10 text-white rounded-lg px-3 py-2.5 text-xs
                            placeholder-text-secondary/40 outline-none transition-all
                            focus:border-neon-cyan/40 focus:shadow-[0_0_8px_rgba(0,229,255,0.1)]"
-                placeholder="https://www.geeksforgeeks.org/user/YourHandle"
+                placeholder="Enter handle or profile URL"
                 value={val}
                 onChange={e => setProfiles(prev => ({ ...prev, [p.key]: e.target.value }))}
               />
@@ -392,11 +389,11 @@ export default function MyProfile() {
         })()}
       </Card>
 
-      {/* ── Save competitive profiles ── */}
+      {/* ── Save profiles ── */}
       <button onClick={handleSave} disabled={saving}
         className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 py-3 text-sm">
         <Save size={15} />
-        {saving ? 'Saving…' : 'Save Competitive Profiles'}
+        {saving ? 'Saving…' : 'Save Profile & Handles'}
       </button>
 
     </div>

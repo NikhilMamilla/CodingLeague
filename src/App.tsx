@@ -22,8 +22,9 @@ const FAQs        = lazy(() => import('./pages/public/FAQs'));
 const Gallery     = lazy(() => import('./pages/public/Gallery'));
 const Login       = lazy(() => import('./pages/auth/Login'));
 const Register    = lazy(() => import('./pages/auth/Register'));
-const Profile     = lazy(() => import('./pages/public/Profile'));
-const Sponsors    = lazy(() => import('./pages/public/Sponsors'));
+const Profile           = lazy(() => import('./pages/public/Profile'));
+const Sponsors          = lazy(() => import('./pages/public/Sponsors'));
+const VerifyCertificate = lazy(() => import('./pages/public/VerifyCertificate'));
 
 // Dashboard pages
 const Dashboard           = lazy(() => import('./pages/dashboard/Dashboard'));
@@ -35,6 +36,7 @@ const Announcements       = lazy(() => import('./pages/dashboard/Announcements')
 
 // Admin pages
 const AdminDashboard      = lazy(() => import('./pages/admin/AdminDashboard'));
+const ManageCertificates  = lazy(() => import('./pages/admin/ManageCertificates'));
 const ManageContests      = lazy(() => import('./pages/admin/ManageContests'));
 const ImportResults       = lazy(() => import('./pages/admin/ImportResults'));
 const ManageUsers         = lazy(() => import('./pages/admin/ManageUsers'));
@@ -74,6 +76,8 @@ function App() {
               <Route path="gallery"                element={<Gallery />}     />
               <Route path="sponsors"               element={<Sponsors />}    />
               <Route path="profile/:participantId" element={<Profile />}     />
+              <Route path="verify/:certificateId"  element={<VerifyCertificate />} />
+              <Route path="verify"                 element={<VerifyCertificate />} />
             </Route>
 
             {/* Auth */}
@@ -96,6 +100,7 @@ function App() {
             <Route element={<AdminRoute />}>
               <Route element={<AdminLayout />}>
                 <Route path="admin"                     element={<AdminDashboard />}      />
+                <Route path="admin/certificates"        element={<ManageCertificates />}  />
                 <Route path="admin/contests"            element={<ManageContests />}      />
                 <Route path="admin/results"             element={<ImportResults />}       />
                 <Route path="admin/users"               element={<ManageUsers />}         />

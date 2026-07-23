@@ -3,13 +3,14 @@ import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Calendar, Upload, Users,
   Megaphone, LogOut, Menu, X, Home, ChevronRight,
-  Shield, Database, Handshake,
+  Shield, Database, Handshake, Award,
 } from 'lucide-react';
 import CBBLogo from '../components/ui/CBBLogo';
 import { useAuth } from '../contexts/AuthContext';
 
 const LINKS = [
   { to: '/admin',               label: 'Overview',      icon: LayoutDashboard, end: true  },
+  { to: '/admin/certificates',  label: 'Certificates',  icon: Award,           end: false },
   { to: '/admin/contests',      label: 'Contests',      icon: Calendar,        end: false },
   { to: '/admin/results',       label: 'Import Results',icon: Upload,          end: false },
   { to: '/admin/users',         label: 'Participants',  icon: Users,           end: false },
