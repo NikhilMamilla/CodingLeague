@@ -7,8 +7,8 @@ import {
 import { db } from '../../lib/firebase';
 import type { Contest, ContestMode, ContestStatus } from '../../types';
 import {
-  Plus, Trash2, Calendar, X, CheckCircle, Clock, Archive,
-  Edit, Link as LinkIcon, ExternalLink, Copy, Megaphone, Zap
+  Plus, Trash2, Calendar, X, Clock, Archive,
+  Edit, Link as LinkIcon, Copy, Megaphone, Zap
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';

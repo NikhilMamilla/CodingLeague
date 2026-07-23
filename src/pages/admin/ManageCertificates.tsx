@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import {
   collection, query, orderBy, onSnapshot, doc,
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
-  renderCertificate, generateCertificateBlob, downloadCertificate, type CertificateData
+  renderCertificate, downloadCertificate, type CertificateData
 } from '../../lib/certificateGenerator';
 
 const CERT_TYPES: CertificateType[] = [
@@ -42,8 +42,8 @@ export default function ManageCertificates() {
   // Form State for Certificate Generation
   const [selectedUids, setSelectedUids] = useState<string[]>([]);
   const [certType, setCertType] = useState<CertificateType>('Participation');
-  const [contestName, setContestName] = useState('CBB WEEKLY CODING LEAGUE');
-  const [season, setSeason] = useState('2026-27');
+  const [contestName] = useState('CBB WEEKLY CODING LEAGUE');
+  const [season] = useState('2026-27');
   const [position, setPosition] = useState('1st');
   const [issuedDateStr, setIssuedDateStr] = useState('29th August 2026');
 

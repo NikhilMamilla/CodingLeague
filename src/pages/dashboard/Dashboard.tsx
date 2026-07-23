@@ -97,7 +97,7 @@ function rankEmoji(n: number) {
 
 export default function Dashboard() {
   const { participant } = useAuth();
-  const [activeContest,    setActiveContest]   = useState<Contest | null>(null);
+  const [_activeContest,   setActiveContest]   = useState<Contest | null>(null);
   const [upcomingContest,  setUpcomingContest] = useState<Contest | null>(null);
   const [recentResults,   setRecentResults]   = useState<ContestResult[]>([]);
   const [leaderboard,     setLeaderboard]     = useState<LeaderRow[]>([]);

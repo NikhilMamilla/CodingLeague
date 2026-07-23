@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users, Calendar, Trophy, Megaphone, Upload,
-  Clock, AlertCircle, ChevronRight, Shield, Handshake, Award,
+  Clock, AlertCircle, ChevronRight, Shield, Award,
 } from 'lucide-react';
 import {
   collection, query, orderBy, onSnapshot, limit,

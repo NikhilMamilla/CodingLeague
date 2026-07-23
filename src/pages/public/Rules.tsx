@@ -1,4 +1,5 @@
 import { BookOpen, AlertCircle, Info } from 'lucide-react';
+import CBBLogo from '../../components/ui/CBBLogo';
 
 const RULES = [
   {
@@ -104,8 +105,8 @@ export default function Rules() {
 
         {/* Header */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-neon-cyan/10 border border-neon-cyan/30 mb-4">
-            <BookOpen size={20} className="text-neon-cyan" />
+          <div className="flex justify-center mb-4">
+            <CBBLogo size={56} glow={false} />
           </div>
           <h1 className="heading-lg mb-3">Contest Rules</h1>
           <p className="text-text-secondary text-sm">

@@ -21,7 +21,7 @@ export interface VerificationResult {
 /**
  * Extracts the clean username/handle from a URL or raw string input.
  */
-export function extractHandle(platform: string, input: string): string {
+export function extractHandle(_platform: string, input: string): string {
   if (!input) return '';
   let str = input.trim();
 
