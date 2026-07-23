@@ -5,7 +5,7 @@ import {
   addDoc, deleteDoc, updateDoc, doc, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import type { Contest, ContestMode, ContestStatus } from '../../types';
+import type { Contest, ContestMode, ContestStatus, ContestDifficulty } from '../../types';
 import {
   Plus, Trash2, Calendar, X, Clock, Archive,
   Edit, Link as LinkIcon, Copy, Megaphone, Zap
@@ -17,7 +17,7 @@ const EMPTY = {
   name: '', weekNumber: '', mode: 'Online' as ContestMode,
   date: '', startTime: '', endTime: '', duration: '120',
   platform: 'HackerRank', contestLink: '', venue: '',
-  problemSetter: '', instructions: '',
+  problemSetter: '', instructions: '', difficulty: 'Easy' as ContestDifficulty,
 };
 
 const STATUS_COLOR: Record<ContestStatus, string> = {
@@ -421,7 +421,7 @@ export default function ManageContests() {
                 <input className="input-field" placeholder="CWCL Week 1 — August 2026" value={form.name} onChange={e => setField('name', e.target.value)} />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="input-label">Week Number</label>
                   <input className="input-field" type="number" min="1" value={form.weekNumber} onChange={e => setField('weekNumber', e.target.value)} />
@@ -431,6 +431,15 @@ export default function ManageContests() {
                   <select className="input-field" value={form.mode} onChange={e => setField('mode', e.target.value)}>
                     <option value="Online">Online</option>
                     <option value="Offline">Offline</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Difficulty *</label>
+                  <select className="input-field" value={form.difficulty} onChange={e => setField('difficulty', e.target.value)}>
+                    <option value="Easy">Easy (1.0x)</option>
+                    <option value="Medium">Medium (1.1x)</option>
+                    <option value="Hard">Hard (1.2x)</option>
+                    <option value="Special">Special (1.3x)</option>
                   </select>
                 </div>
               </div>
@@ -520,7 +529,7 @@ export default function ManageContests() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="input-label">Week Number</label>
                   <input
@@ -539,6 +548,19 @@ export default function ManageContests() {
                   >
                     <option value="Online">Online</option>
                     <option value="Offline">Offline</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="input-label">Difficulty *</label>
+                  <select
+                    className="input-field"
+                    value={editingContest.difficulty || 'Easy'}
+                    onChange={e => setEditingContest({ ...editingContest, difficulty: e.target.value as ContestDifficulty })}
+                  >
+                    <option value="Easy">Easy (1.0x)</option>
+                    <option value="Medium">Medium (1.1x)</option>
+                    <option value="Hard">Hard (1.2x)</option>
+                    <option value="Special">Special (1.3x)</option>
                   </select>
                 </div>
               </div>

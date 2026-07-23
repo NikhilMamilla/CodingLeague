@@ -15,12 +15,15 @@ import type { Contest, ContestResult, Announcement } from '../../types';
 import { BADGE_META } from '../../types';
 
 const TIER_CFG: Record<string, { cls: string; next: number; min: number; nextName: string }> = {
-  Beginner:    { cls: 'tier-beginner',    next: 1000, min: 0,    nextName: 'Explorer'    },
-  Explorer:    { cls: 'tier-explorer',    next: 1200, min: 1000, nextName: 'Coder'       },
-  Coder:       { cls: 'tier-coder',       next: 1500, min: 1200, nextName: 'Expert'      },
-  Expert:      { cls: 'tier-expert',      next: 1800, min: 1500, nextName: 'Master'      },
-  Master:      { cls: 'tier-master',      next: 2200, min: 1800, nextName: 'Grandmaster' },
-  Grandmaster: { cls: 'tier-grandmaster', next: 9999, min: 2200, nextName: 'Max'         },
+  Beginner:               { cls: 'text-gray-400 font-semibold',    next: 900,   min: 800,  nextName: 'Explorer'              },
+  Explorer:               { cls: 'text-emerald-400 font-semibold', next: 1000,  min: 900,  nextName: 'Coder'                 },
+  Coder:                  { cls: 'text-cyan-400 font-semibold',    next: 1100,  min: 1000, nextName: 'Specialist'            },
+  Specialist:             { cls: 'text-blue-400 font-semibold',    next: 1250,  min: 1100, nextName: 'Expert'                },
+  Expert:                 { cls: 'text-indigo-400 font-semibold',  next: 1450,  min: 1250, nextName: 'Candidate Master'       },
+  'Candidate Master':     { cls: 'text-purple-400 font-semibold',  next: 1650,  min: 1450, nextName: 'Master'                },
+  Master:                 { cls: 'text-amber-400 font-semibold',   next: 1850,  min: 1650, nextName: 'Grandmaster'           },
+  Grandmaster:            { cls: 'text-rose-400 font-semibold',    next: 2100,  min: 1850, nextName: 'Legendary Grandmaster' },
+  'Legendary Grandmaster':{ cls: 'text-red-500 font-bold',         next: 99999, min: 2100, nextName: 'Max'                   },
 };
 
 const PLATFORM_CFG = [
@@ -206,7 +209,7 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-          <Link to="/schedule" className="btn-primary text-xs px-5 py-2 flex items-center gap-2 shrink-0">
+          <Link to="/schedule" className="hidden sm:flex btn-primary text-xs px-5 py-2 items-center gap-2 shrink-0">
             <Calendar size={12} /> View Schedule
           </Link>
         </div>
@@ -267,7 +270,7 @@ export default function Dashboard() {
                 <div className="text-text-secondary text-[10px] uppercase tracking-widest mb-1">Starts In</div>
                 <CountdownTimer date={upcomingContest.date} startTime={upcomingContest.startTime} />
               </div>
-              <div className="flex gap-3">
+              <div className="hidden sm:flex gap-3">
                 {upcomingContest.contestLink && (
                   <a href={upcomingContest.contestLink} target="_blank" rel="noopener noreferrer"
                     className="btn-primary text-xs py-2 px-4">Join Contest</a>

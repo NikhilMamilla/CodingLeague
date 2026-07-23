@@ -99,32 +99,32 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-midnight bg-grid flex flex-col items-center justify-center px-4 py-8">
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-80 h-80 bg-neon-cyan/5 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-midnight bg-grid px-4 py-6 sm:px-6 sm:py-10">
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-56 h-56 sm:w-80 sm:h-80 bg-neon-cyan/5 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="relative w-full max-w-sm">
+      <div className="relative mx-auto flex w-full max-w-[420px] flex-col">
 
         {/* Back to home */}
-        <Link to="/" className="inline-flex items-center gap-1.5 text-text-secondary/60 hover:text-neon-cyan text-xs font-body transition-colors mb-6">
+        <Link to="/" className="inline-flex items-center gap-1.5 self-start text-text-secondary/60 hover:text-neon-cyan text-xs font-body transition-colors mb-5 sm:mb-6">
           <ArrowLeft size={13} /> Back to Home
         </Link>
 
         {/* Logo + header */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="flex justify-center mb-3 sm:mb-4">
             <CBBLogo size={64} glow={false} />
           </div>
           <h1 className="heading-sm mb-1">
             {view === 'login' ? 'Welcome Back' : 'Reset Password'}
           </h1>
-          <p className="text-text-secondary text-xs">
+          <p className="text-text-secondary text-xs leading-relaxed px-2">
             {view === 'login' ? 'Sign in to your CWCL account' : 'We\'ll send a reset link to your email'}
           </p>
         </div>
 
         {/* ── LOGIN VIEW ── */}
         {view === 'login' && (
-          <div className="card-glow space-y-4">
+          <div className="card-glow space-y-3 sm:space-y-4 p-4 sm:p-5">
             {/* Google */}
             <button
               onClick={handleGoogleLogin}
@@ -200,7 +200,7 @@ export default function Login() {
 
         {/* ── FORGOT PASSWORD VIEW ── */}
         {view === 'forgot' && (
-          <div className="card-glow space-y-4">
+          <div className="card-glow space-y-3 sm:space-y-4 p-4 sm:p-5">
             {!resetSent ? (
               <>
                 <div>

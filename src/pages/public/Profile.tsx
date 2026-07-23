@@ -8,13 +8,9 @@ import { Globe, ExternalLink, Trophy, Star, Award } from 'lucide-react';
 import type { Participant, ContestResult } from '../../types';
 import { BADGE_META } from '../../types';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { TIER_CONFIG } from '../../lib/ratingEngine';
 
 import { getCanonicalProfileUrl } from '../../lib/profileVerification';
-
-const TIER_CLASS: Record<string, string> = {
-  Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
-  Expert: 'tier-expert', Master: 'tier-master', Grandmaster: 'tier-grandmaster',
-};
 
 export default function Profile() {
   const { participantId } = useParams<{ participantId: string }>();
@@ -102,13 +98,23 @@ export default function Profile() {
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-3 mb-2">
               <h1 className="font-heading text-white text-xl font-bold">{profile.fullName}</h1>
-              <span className={TIER_CLASS[profile.tier] ?? 'tier-beginner'}>{profile.tier}</span>
+              {(() => {
+                const cfg = TIER_CONFIG[profile.tier] ?? TIER_CONFIG.Beginner;
+                return (
+                  <span className={`text-[10px] font-heading font-semibold px-2.5 py-0.5 rounded border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
+                    {profile.tier}
+                  </span>
+                );
+              })()}
             </div>
             <p className="text-text-secondary text-xs mb-3">{profile.college} · {profile.branch} · {profile.year}</p>
             {profile.bio && <p className="text-text-secondary text-sm leading-relaxed mb-3">{profile.bio}</p>}
-            <div className="flex flex-wrap gap-3 text-xs">
+            <div className="flex flex-wrap gap-4 text-xs">
               <span className="flex items-center gap-1 text-text-secondary">
-                <span className="text-neon-cyan font-numbers font-bold">{profile.rating}</span> Rating
+                <span className="text-neon-cyan font-numbers font-bold text-base">{profile.rating}</span> Rating
+              </span>
+              <span className="flex items-center gap-1 text-text-secondary">
+                <span className="text-gold font-numbers font-bold text-base">{profile.peakRating ?? profile.rating}</span> Peak Rating
               </span>
               <span className="flex items-center gap-1 text-text-secondary">
                 <span className="font-numbers text-white font-bold">{profile.contestsParticipated}</span> Contests

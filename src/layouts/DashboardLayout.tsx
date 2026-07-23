@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, User, BarChart2, Award, LogOut,
-  Menu, X, Home, ChevronRight, TrendingUp, Trophy, Megaphone, BookOpen,
+  Menu, X, Home, ChevronRight, TrendingUp, Trophy, Megaphone, BookOpen, Compass,
 } from 'lucide-react';
 import CBBLogo from '../components/ui/CBBLogo';
 import { useAuth } from '../contexts/AuthContext';
 
 const LINKS = [
   { to: '/dashboard',              label: 'Overview',       icon: LayoutDashboard, end: true  },
+  { to: '/dashboard/guide',        label: 'CWCL Guide',     icon: Compass,         end: false },
   { to: '/dashboard/leaderboard',  label: 'Leaderboard',    icon: Trophy,          end: false },
   { to: '/dashboard/announcements',label: 'Announcements',  icon: Megaphone,       end: false },
   { to: '/dashboard/profile',      label: 'My Profile',     icon: User,            end: false },

@@ -33,7 +33,7 @@ const FAQS = [
   },
   {
     q: 'What is my CWCL Rating?',
-    a: 'Your rating starts at 800 (Beginner). It increases or decreases after each contest based on your rank relative to your expected performance — similar to Codeforces Elo.',
+    a: 'Your rating starts at 800 (Beginner title) with a floor of 800. Ratings are permanent and never reset. CWCL Rating System v1.0 features 9 titles: Beginner (800), Explorer (900), Coder (1000), Specialist (1100), Expert (1250), Candidate Master (1450), Master (1650), Grandmaster (1850), and Legendary Grandmaster (2100+).',
   },
   {
     q: 'How do I ensure my results are tracked?',

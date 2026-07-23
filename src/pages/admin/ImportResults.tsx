@@ -1,13 +1,20 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   collection, query, orderBy, onSnapshot,
-  doc, writeBatch, getDocs, getDoc, serverTimestamp, increment,
+  doc, writeBatch, getDocs, getDoc, serverTimestamp, arrayUnion,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
-import type { Contest } from '../../types';
-import { LEAGUE_POINTS_TABLE, PARTICIPATION_POINTS, getTierFromRating } from '../../types';
+import type { Contest, ContestDifficulty } from '../../types';
+import { getTierFromRating } from '../../types';
 import { evaluateAndAwardBadges } from '../../lib/badges';
-import { Upload, FileText, AlertCircle, CheckCircle } from 'lucide-react';
+import {
+  calculateCWCLRatingChanges,
+  TIER_CONFIG,
+  DIFFICULTY_MULTIPLIERS,
+  getSizeMultiplier,
+  type RatingCalculationResult,
+} from '../../lib/ratingEngine';
+import { Upload, FileText, AlertCircle, CheckCircle, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 import { extractHandle } from '../../lib/profileVerification';
@@ -23,50 +30,115 @@ interface ParsedRow {
 function parseCSV(text: string): ParsedRow[] {
   const lines = text.trim().split('\n');
   if (lines.length < 2) return [];
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-  const rankIdx    = headers.findIndex(h => h.includes('rank'));
-  const nameIdx    = headers.findIndex(h => h.includes('name') || h.includes('handle'));
-  const scoreIdx   = headers.findIndex(h => h.includes('score') || h.includes('point'));
-  const penaltyIdx = headers.findIndex(h => h.includes('penalty'));
-  if (rankIdx < 0 || nameIdx < 0 || scoreIdx < 0 || penaltyIdx < 0) return [];
-  return lines.slice(1).filter(l => l.trim()).map(l => {
-    const cols = l.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-    return {
-      rank:    parseInt(cols[rankIdx])      || 0,
-      name:    cols[nameIdx]                || '',
-      score:   parseFloat(cols[scoreIdx])   || 0,
-      penalty: parseFloat(cols[penaltyIdx]) || 0,
-      solved:  0,
-    };
-  }).filter(r => r.rank > 0);
-}
+  const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
+  const rankIdx = headers.findIndex((h) => h.includes('rank'));
+  const nameIdx = headers.findIndex((h) => h.includes('name') || h.includes('handle'));
+  const scoreIdx = headers.findIndex((h) => h.includes('score') || h.includes('point'));
+  const penaltyIdx = headers.findIndex((h) => h.includes('penalty'));
+  const solvedIdx = headers.findIndex((h) => h.includes('solved'));
 
-// Simple Elo-style rating delta based on rank and field size
-function calcRatingDelta(rank: number, totalParticipants: number): number {
-  if (rank === 1)  return 50;
-  if (rank <= 3)   return 30;
-  if (rank <= 10)  return 15;
-  if (rank <= Math.ceil(totalParticipants * 0.25)) return 8;
-  if (rank <= Math.ceil(totalParticipants * 0.5))  return 3;
-  if (rank <= Math.ceil(totalParticipants * 0.75)) return -5;
-  return -10;
+  if (rankIdx < 0 || nameIdx < 0 || scoreIdx < 0 || penaltyIdx < 0) return [];
+
+  return lines
+    .slice(1)
+    .filter((l) => l.trim())
+    .map((l) => {
+      const cols = l.split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+      return {
+        rank: parseInt(cols[rankIdx]) || 0,
+        name: cols[nameIdx] || '',
+        score: parseFloat(cols[scoreIdx]) || 0,
+        penalty: parseFloat(cols[penaltyIdx]) || 0,
+        solved: solvedIdx >= 0 ? parseInt(cols[solvedIdx]) || 0 : 0,
+      };
+    })
+    .filter((r) => r.rank > 0);
 }
 
 export default function ImportResults() {
-  const [contests,   setContests]   = useState<Contest[]>([]);
-  const [selected,   setSelected]   = useState('');
-  const [rows,       setRows]       = useState<ParsedRow[]>([]);
-  const [fileName,   setFileName]   = useState('');
+  const [contests, setContests] = useState<Contest[]>([]);
+  const [selected, setSelected] = useState('');
+  const [rows, setRows] = useState<ParsedRow[]>([]);
+  const [fileName, setFileName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [allParticipants, setAllParticipants] = useState<any[]>([]);
+
+  // Calculated Ratings Preview
+  const [previewCalculations, setPreviewCalculations] = useState<RatingCalculationResult[]>([]);
+
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Real-time listen to contests
   useEffect(() => {
     const q = query(collection(db, 'contests'), orderBy('date', 'desc'));
-    const unsub = onSnapshot(q, snap => {
-      setContests(snap.docs.map(d => ({ id: d.id, ...d.data() } as Contest)));
+    const unsub = onSnapshot(q, (snap) => {
+      setContests(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Contest)));
     });
     return () => unsub();
   }, []);
+
+  // Real-time listen to participants for preview calculations
+  useEffect(() => {
+    const q = query(collection(db, 'participants'));
+    const unsub = onSnapshot(q, (snap) => {
+      setAllParticipants(snap.docs.map((d) => ({ docId: d.id, ...d.data() })));
+    });
+    return () => unsub();
+  }, []);
+
+  // Re-calculate preview whenever rows, selected contest, or participants update
+  useEffect(() => {
+    if (rows.length === 0 || !selected) {
+      setPreviewCalculations([]);
+      return;
+    }
+
+    const contest = contests.find((c) => c.id === selected);
+    const difficulty: ContestDifficulty = contest?.difficulty ?? 'Easy';
+
+    const inputs = rows.map((row) => {
+      const rawTarget = row.name.trim().toLowerCase();
+      const targetCleanHandle = extractHandle('generic', row.name).toLowerCase();
+
+      const match = allParticipants.find((p: any) => {
+        if (p.fullName?.toLowerCase() === rawTarget) return true;
+        if (p.participantId?.toLowerCase() === rawTarget) return true;
+
+        const cfHandle = p.codeforcesHandle ? extractHandle('codeforcesHandle', p.codeforcesHandle).toLowerCase() : '';
+        const lcHandle = p.leetcodeUsername ? extractHandle('leetcodeUsername', p.leetcodeUsername).toLowerCase() : '';
+        const ccHandle = p.codechefUsername ? extractHandle('codechefUsername', p.codechefUsername).toLowerCase() : '';
+        const hrHandle = p.hackerrankUsername ? extractHandle('hackerrankUsername', p.hackerrankUsername).toLowerCase() : '';
+        const gfgHandle = p.gfgUsername ? extractHandle('gfgUsername', p.gfgUsername).toLowerCase() : '';
+
+        return (
+          cfHandle === rawTarget || cfHandle === targetCleanHandle ||
+          lcHandle === rawTarget || lcHandle === targetCleanHandle ||
+          ccHandle === rawTarget || ccHandle === targetCleanHandle ||
+          hrHandle === rawTarget || hrHandle === targetCleanHandle ||
+          gfgHandle === rawTarget || gfgHandle === targetCleanHandle ||
+          p.codeforcesHandle?.toLowerCase() === rawTarget ||
+          p.leetcodeUsername?.toLowerCase() === rawTarget ||
+          p.codechefUsername?.toLowerCase() === rawTarget ||
+          p.hackerrankUsername?.toLowerCase() === rawTarget ||
+          p.gfgUsername?.toLowerCase() === rawTarget
+        );
+      });
+
+      return {
+        rank: row.rank,
+        participantId: match?.participantId ?? undefined,
+        participantName: row.name,
+        currentRating: match?.rating ?? 800,
+        score: row.score,
+        penalty: row.penalty,
+        solved: row.solved,
+        currentStreak: match?.streak ?? 0,
+      };
+    });
+
+    const calculated = calculateCWCLRatingChanges(inputs, difficulty);
+    setPreviewCalculations(calculated);
+  }, [rows, selected, allParticipants, contests]);
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -77,7 +149,7 @@ export default function ImportResults() {
       const text = ev.target?.result as string;
       const parsed = parseCSV(text);
       if (parsed.length === 0) {
-        toast.error('Could not parse file. Ensure it has Rank, Name, Score, Penalty columns.');
+        toast.error('Could not parse file. Ensure headers include Rank, Name, Score, Penalty.');
         return;
       }
       setRows(parsed);
@@ -86,37 +158,39 @@ export default function ImportResults() {
   }
 
   async function handleImport() {
-    if (!selected)        { toast.error('Select a contest first'); return; }
-    if (rows.length === 0) { toast.error('No data to import');      return; }
+    if (!selected) {
+      toast.error('Select a contest first');
+      return;
+    }
+    if (rows.length === 0) {
+      toast.error('No data to import');
+      return;
+    }
     setSubmitting(true);
 
     try {
-      const contest = contests.find(c => c.id === selected)!;
+      const contest = contests.find((c) => c.id === selected)!;
 
-      // ── 1. Fetch all participants to match names ──────────────────────────
-      const partSnap  = await getDocs(collection(db, 'participants'));
-      const allParts  = partSnap.docs.map(d => ({ docId: d.id, ...d.data() } as any));
+      const partSnap = await getDocs(collection(db, 'participants'));
+      const allParts = partSnap.docs.map((d) => ({ docId: d.id, ...d.data() } as any));
 
-      // Fetch total COMPLETED contests count for accurate attendance calc
       const contestsSnap = await getDocs(collection(db, 'contests'));
-      const completedContests = contestsSnap.docs.filter(d => d.data().status === 'Completed').length;
-      // +1 because this contest is being marked Completed in this same batch
+      const completedContests = contestsSnap.docs.filter((d) => d.data().status === 'Completed').length;
       const totalContests = completedContests + 1;
 
-      const totalParticipants = rows.length;
       const batch = writeBatch(db);
-
       const matchedUids: string[] = [];
 
-      for (const row of rows) {
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const calcRes = previewCalculations[i];
+
         const rawTarget = row.name.trim().toLowerCase();
         const targetCleanHandle = extractHandle('generic', row.name).toLowerCase();
 
-        // Robust match by full name, participantId, or clean handles across all platforms
         const match = allParts.find((p: any) => {
           if (p.fullName?.toLowerCase() === rawTarget) return true;
           if (p.participantId?.toLowerCase() === rawTarget) return true;
-
           const cfHandle = p.codeforcesHandle ? extractHandle('codeforcesHandle', p.codeforcesHandle).toLowerCase() : '';
           const lcHandle = p.leetcodeUsername ? extractHandle('leetcodeUsername', p.leetcodeUsername).toLowerCase() : '';
           const ccHandle = p.codechefUsername ? extractHandle('codechefUsername', p.codechefUsername).toLowerCase() : '';
@@ -137,77 +211,102 @@ export default function ImportResults() {
           );
         });
 
-        const lp          = LEAGUE_POINTS_TABLE[row.rank] ?? PARTICIPATION_POINTS;
-        const ratingBefore = match?.rating ?? 800;
-        const delta        = calcRatingDelta(row.rank, totalParticipants);
-        const ratingAfter  = Math.max(800, ratingBefore + delta);
-        const newTier      = getTierFromRating(ratingAfter);
+        const ratingBefore = calcRes ? calcRes.previousRating : match?.rating ?? 800;
+        const ratingAfter = calcRes ? calcRes.newRating : ratingBefore;
+        const ratingChange = calcRes ? calcRes.ratingChange : 0;
+        const leaguePoints = calcRes ? calcRes.leaguePoints : 10;
+        const newTier = getTierFromRating(ratingAfter);
 
-        // ── Write contest result ──
+        // Write contest result doc
         const resultRef = doc(collection(db, 'contestResults'));
         batch.set(resultRef, {
-          contestId:       selected,
-          contestName:     contest.name,
-          participantId:   match?.participantId ?? null,
+          contestId: selected,
+          contestName: contest.name,
+          participantId: match?.participantId ?? null,
           participantName: row.name,
-          college:         match?.college ?? 'Unknown',
-          rank:            row.rank,
-          score:           row.score,
-          penalty:         row.penalty,
-          problemsSolved:  row.solved ?? 0,
-          leaguePoints:    lp,
+          college: match?.college ?? 'Unknown',
+          rank: row.rank,
+          score: row.score,
+          penalty: row.penalty,
+          problemsSolved: row.solved ?? 0,
+          leaguePoints,
           ratingBefore,
           ratingAfter,
-          importedAt:      serverTimestamp(),
+          ratingChange,
+          importedAt: serverTimestamp(),
         });
 
-        // ── Update participant stats (only for matched participants) ──
+        // Update matched participant doc
         if (match?.docId) {
           matchedUids.push(match.docId);
 
-          // Re-fetch to get latest contestsParticipated for accurate attendance
-          const partDocRef  = doc(db, 'participants', match.docId);
+          const partDocRef = doc(db, 'participants', match.docId);
           const partDocSnap = await getDoc(partDocRef);
-          const partData    = partDocSnap.data() as any;
+          const partData = partDocSnap.data() as any;
+
           const newContestsCount = (partData?.contestsParticipated ?? 0) + 1;
-          const newAttendance    = Math.min(100, Math.round((newContestsCount / totalContests) * 100));
+          const newAttendance = Math.min(100, Math.round((newContestsCount / totalContests) * 100));
+
+          const currentPeakRating = Math.max(partData?.peakRating ?? 800, ratingAfter);
+          const currentPeakTitle = getTierFromRating(currentPeakRating);
+          const newStreak = (partData?.streak ?? 0) + 1;
+          const newMonthlyPoints = (partData?.monthlyPoints ?? 0) + leaguePoints;
+
+          const historyItem = {
+            contestId: selected,
+            contestName: contest.name,
+            contestDate: contest.date,
+            rank: row.rank,
+            previousRating: ratingBefore,
+            newRating: ratingAfter,
+            ratingChange,
+          };
 
           batch.update(partDocRef, {
-            rating:               ratingAfter,
-            tier:                 newTier,
-            contestsParticipated: increment(1),
-            attendance:           newAttendance,
+            rating: ratingAfter,
+            tier: newTier,
+            peakRating: currentPeakRating,
+            peakTitle: currentPeakTitle,
+            monthlyPoints: newMonthlyPoints,
+            streak: newStreak,
+            lastContestDate: contest.date,
+            contestsParticipated: newContestsCount,
+            attendance: newAttendance,
+            ratingHistory: arrayUnion(historyItem),
           });
         }
       }
 
-      // ── Mark contest as Completed ──
-      batch.update(doc(db, 'contests', selected), { status: 'Completed' });
+      // Mark contest as completed & lock calculations
+      batch.update(doc(db, 'contests', selected), {
+        status: 'Completed',
+        ratingCalculated: true,
+        resultsPublished: true,
+        lockedAt: serverTimestamp(),
+      });
 
       await batch.commit();
-      toast.success(`✅ Imported ${rows.length} results for ${contest.name}!`);
+      toast.success(`✅ CWCL v1.0 Rating calculations published for ${contest.name}!`);
 
-      // ── 2. Evaluate badges for all matched participants ──────────────────
+      // Evaluate badges
       let badgeCount = 0;
       for (const uid of matchedUids) {
         try {
           const awarded = await evaluateAndAwardBadges(uid);
           badgeCount += awarded.length;
-        } catch { /**/ }
+        } catch {
+          /**/
+        }
       }
 
       if (badgeCount > 0) {
-        toast.success(
-          `🎖️ Awarded ${badgeCount} new badge${badgeCount !== 1 ? 's' : ''}!`,
-          { duration: 4000 }
-        );
+        toast.success(`🎖️ Awarded ${badgeCount} new badge${badgeCount !== 1 ? 's' : ''}!`);
       }
 
       setRows([]);
       setFileName('');
       setSelected('');
       if (fileRef.current) fileRef.current.value = '';
-
     } catch (e: any) {
       toast.error(e.message ?? 'Import failed');
     } finally {
@@ -215,29 +314,82 @@ export default function ImportResults() {
     }
   }
 
+  const selectedContest = contests.find((c) => c.id === selected);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="heading-md">Import Results</h1>
-        <p className="text-text-secondary text-xs mt-1">Upload a CSV with contest results. Participant stats update automatically.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="heading-md flex items-center gap-2">
+            <Shield className="text-neon-cyan" size={24} />
+            CWCL Rating System v1.0 Result Manager
+          </h1>
+          <p className="text-text-secondary text-xs mt-1">
+            Upload CSV results, preview Elo rating changes, and publish official League Points.
+          </p>
+        </div>
       </div>
 
       {/* Select Contest */}
       <div className="card space-y-4">
-        <h2 className="heading-sm">1. Select Contest</h2>
-        <select className="input-field" value={selected} onChange={e => setSelected(e.target.value)}>
-          <option value="">-- Select a contest --</option>
-          {contests.map(c => <option key={c.id} value={c.id}>{c.name} · {c.date}</option>)}
-        </select>
+        <h2 className="heading-sm flex items-center gap-2">
+          <span>1. Select Contest</span>
+          {selectedContest && (
+            <span
+              className={`text-[10px] px-2 py-0.5 rounded font-numbers font-semibold ${
+                selectedContest.ratingCalculated
+                  ? 'bg-success/10 text-success border border-success/30'
+                  : 'bg-warning/10 text-warning border border-warning/30'
+              }`}
+            >
+              {selectedContest.ratingCalculated ? 'Rating Locked' : 'Pending Calculation'}
+            </span>
+          )}
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="input-label">Contest</label>
+            <select className="input-field" value={selected} onChange={(e) => setSelected(e.target.value)}>
+              <option value="">-- Select a contest --</option>
+              {contests.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({c.difficulty || 'Easy'} · {c.date}) {c.ratingCalculated ? '🔒' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {selectedContest && (
+            <div className="bg-white/5 border border-white/10 rounded-lg p-3 space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-text-secondary">Difficulty Multiplier:</span>
+                <span className="text-neon-cyan font-numbers font-bold">
+                  {selectedContest.difficulty || 'Easy'} (
+                  {DIFFICULTY_MULTIPLIERS[selectedContest.difficulty || 'Easy']}x)
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-text-secondary">Field Size Multiplier:</span>
+                <span className="text-electric-blue font-numbers font-bold">
+                  {rows.length} players ({getSizeMultiplier(rows.length)}x)
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Upload CSV */}
       <div className="card space-y-4">
-        <h2 className="heading-sm">2. Upload CSV / Excel</h2>
-        <div className="flex items-center gap-3 bg-warning/5 border border-warning/20 rounded-lg px-4 py-3">
-          <AlertCircle size={14} className="text-warning shrink-0" />
-          <p className="text-warning/80 text-xs">Required columns: <strong>Rank, Name, Score, Penalty</strong> (case-insensitive headers)</p>
+        <h2 className="heading-sm">2. Upload Contest CSV</h2>
+        <div className="flex items-center gap-3 bg-neon-cyan/5 border border-neon-cyan/20 rounded-lg px-4 py-3">
+          <AlertCircle size={14} className="text-neon-cyan shrink-0" />
+          <p className="text-neon-cyan/90 text-xs">
+            Required headers: <strong>Rank, Name, Score, Penalty</strong> (Optional: <strong>Solved</strong>)
+          </p>
         </div>
+
         <div
           onClick={() => fileRef.current?.click()}
           className="border-2 border-dashed border-neon-cyan/20 hover:border-neon-cyan/40 rounded-xl p-8 text-center cursor-pointer transition-colors"
@@ -251,55 +403,92 @@ export default function ImportResults() {
             </div>
           ) : (
             <>
-              <p className="text-text-secondary text-sm">Click to upload or drag & drop</p>
-              <p className="text-text-secondary/60 text-xs mt-1">CSV, XLS, XLSX supported</p>
+              <p className="text-text-secondary text-sm">Click to upload CSV results</p>
+              <p className="text-text-secondary/60 text-xs mt-1">CSV files supported</p>
             </>
           )}
         </div>
       </div>
 
-      {/* Preview */}
-      {rows.length > 0 && (
+      {/* Live Preview Table */}
+      {previewCalculations.length > 0 && (
         <div className="card space-y-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle size={14} className="text-success" />
-            <h2 className="heading-sm">3. Preview ({rows.length} rows)</h2>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/10 pb-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle size={16} className="text-success" />
+              <h2 className="heading-sm">3. CWCL Rating System v1.0 Live Calculation Preview</h2>
+            </div>
+            <span className="text-xs text-text-secondary">
+              Total Participants: <strong className="text-neon-cyan">{previewCalculations.length}</strong>
+            </span>
           </div>
-          <div className="overflow-x-auto max-h-64">
+
+          <div className="overflow-x-auto max-h-80">
             <table className="w-full text-xs font-body">
-              <thead className="sticky top-0 bg-card-dark">
-                <tr className="text-text-secondary/70 border-b border-neon-cyan/10">
-                  <th className="text-left py-2 pr-4 text-[10px] uppercase">Rank</th>
-                  <th className="text-left py-2 pr-4 text-[10px] uppercase">Name</th>
-                  <th className="text-center py-2 px-2 text-[10px] uppercase">Score</th>
-                  <th className="text-center py-2 px-2 text-[10px] uppercase">Penalty</th>
+              <thead className="sticky top-0 bg-card-dark z-10">
+                <tr className="text-text-secondary border-b border-neon-cyan/10">
+                  <th className="text-left py-2 pr-3 text-[10px] uppercase">Rank</th>
+                  <th className="text-left py-2 pr-3 text-[10px] uppercase">Name</th>
+                  <th className="text-center py-2 px-2 text-[10px] uppercase">Prev Rating</th>
+                  <th className="text-center py-2 px-2 text-[10px] uppercase">Base / Exp</th>
+                  <th className="text-center py-2 px-2 text-[10px] uppercase">Upset / Streak</th>
+                  <th className="text-center py-2 px-2 text-[10px] uppercase">Rating Delta</th>
+                  <th className="text-center py-2 px-2 text-[10px] uppercase">New Rating</th>
+                  <th className="text-center py-2 px-2 text-[10px] uppercase">Title</th>
                   <th className="text-center py-2 px-2 text-[10px] uppercase">LP</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neon-cyan/5">
-                {rows.slice(0, 20).map((r, i) => (
-                  <tr key={i}>
-                    <td className="py-2 pr-4 font-numbers text-text-secondary">#{r.rank}</td>
-                    <td className="py-2 pr-4 text-white">{r.name}</td>
-                    <td className="py-2 px-2 text-center font-numbers">{r.score}</td>
-                    <td className="py-2 px-2 text-center font-numbers text-text-secondary">{r.penalty}</td>
-                    <td className="py-2 px-2 text-center font-numbers text-neon-cyan">
-                      {LEAGUE_POINTS_TABLE[r.rank] ?? PARTICIPATION_POINTS}
-                    </td>
-                  </tr>
-                ))}
-                {rows.length > 20 && (
-                  <tr><td colSpan={5} className="py-2 text-center text-text-secondary text-[10px]">
-                    … and {rows.length - 20} more rows
-                  </td></tr>
-                )}
+                {previewCalculations.map((calc, i) => {
+                  const cfg = TIER_CONFIG[calc.newTier];
+                  return (
+                    <tr key={i} className="hover:bg-white/5 transition-colors">
+                      <td className="py-2 pr-3 font-numbers text-text-secondary">#{calc.rank}</td>
+                      <td className="py-2 pr-3 text-white font-medium">{calc.participantName}</td>
+                      <td className="py-2 px-2 text-center font-numbers text-text-secondary">
+                        {calc.previousRating}
+                      </td>
+                      <td className="py-2 px-2 text-center font-numbers text-[11px] text-text-secondary">
+                        +{calc.breakdown.baseChange} / {calc.breakdown.expectationDelta >= 0 ? '+' : ''}
+                        {calc.breakdown.expectationDelta}
+                      </td>
+                      <td className="py-2 px-2 text-center font-numbers text-[11px] text-text-secondary">
+                        +{calc.breakdown.upsetBonus} / +{calc.breakdown.consistencyBonus}
+                      </td>
+                      <td
+                        className={`py-2 px-2 text-center font-numbers font-bold ${
+                          calc.ratingChange >= 0 ? 'text-success' : 'text-rose-400'
+                        }`}
+                      >
+                        {calc.ratingChange >= 0 ? `+${calc.ratingChange}` : calc.ratingChange}
+                      </td>
+                      <td className="py-2 px-2 text-center font-numbers text-neon-cyan font-bold">
+                        {calc.newRating}
+                      </td>
+                      <td className="py-2 px-2 text-center">
+                        <span
+                          className={`text-[10px] font-heading font-semibold px-2 py-0.5 rounded border ${cfg.bg} ${cfg.color} ${cfg.border}`}
+                        >
+                          {calc.newTier}
+                        </span>
+                      </td>
+                      <td className="py-2 px-2 text-center font-numbers font-bold text-gold">
+                        +{calc.leaguePoints}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-          <button onClick={handleImport} disabled={submitting || !selected}
-            className="btn-primary w-full flex items-center justify-center gap-2 text-sm disabled:opacity-50">
-            <Upload size={14} />
-            {submitting ? 'Importing…' : `Import ${rows.length} Results`}
+
+          <button
+            onClick={handleImport}
+            disabled={submitting || !selected}
+            className="btn-primary w-full flex items-center justify-center gap-2 text-sm py-3 disabled:opacity-50"
+          >
+            <Shield size={16} />
+            {submitting ? 'Publishing Calculations…' : `Publish CWCL Ratings for ${previewCalculations.length} Participants`}
           </button>
         </div>
       )}

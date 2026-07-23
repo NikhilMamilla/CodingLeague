@@ -3,11 +3,7 @@ import { Search } from 'lucide-react';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { Participant } from '../../types';
-
-const TIER_CLASS: Record<string, string> = {
-  Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
-  Expert: 'tier-expert', Master: 'tier-master', Grandmaster: 'tier-grandmaster',
-};
+import { TIER_CONFIG } from '../../lib/ratingEngine';
 
 export default function Leaderboard() {
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -92,9 +88,15 @@ export default function Leaderboard() {
                       </td>
                       <td className="px-4 py-3 text-white font-medium">{p.fullName}</td>
                       <td className="px-4 py-3 text-text-secondary">{p.college}</td>
-                      <td className="px-4 py-3 text-center font-numbers text-neon-cyan">{p.rating}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className={TIER_CLASS[p.tier] ?? 'tier-beginner'}>{p.tier}</span>
+                        {(() => {
+                          const cfg = TIER_CONFIG[p.tier] ?? TIER_CONFIG.Beginner;
+                          return (
+                            <span className={`text-[10px] font-heading font-semibold px-2 py-0.5 rounded border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
+                              {p.tier}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-center font-numbers text-text-secondary">{p.contestsParticipated}</td>
                       <td className="px-4 py-3 text-center font-numbers text-text-secondary">{p.badges?.length ?? 0}</td>

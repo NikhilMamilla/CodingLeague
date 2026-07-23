@@ -88,7 +88,7 @@ export default function AdminDashboard() {
             <span className="text-electric-blue">{participant?.fullName ?? 'Admin'}</span>
           </p>
         </div>
-        <div className="flex gap-3 flex-wrap">
+        <div className="hidden sm:flex gap-3 flex-wrap">
           <Link to="/admin/certificates" className="btn-primary text-xs px-4 py-2 flex items-center gap-2">
             <Award size={12} /> Manage Certificates
           </Link>

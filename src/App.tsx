@@ -28,6 +28,7 @@ const VerifyCertificate = lazy(() => import('./pages/public/VerifyCertificate'))
 
 // Dashboard pages
 const Dashboard           = lazy(() => import('./pages/dashboard/Dashboard'));
+const CWCLGuide           = lazy(() => import('./pages/dashboard/CWCLGuide'));
 const MyProfile           = lazy(() => import('./pages/dashboard/MyProfile'));
 const MyStats             = lazy(() => import('./pages/dashboard/MyStats'));
 const MyCertificates      = lazy(() => import('./pages/dashboard/MyCertificates'));
@@ -88,6 +89,7 @@ function App() {
             <Route element={<ProtectedRoute />}>
               <Route element={<DashboardLayout />}>
                 <Route path="dashboard"                   element={<Dashboard />}             />
+                <Route path="dashboard/guide"             element={<CWCLGuide />}             />
                 <Route path="dashboard/leaderboard"       element={<DashboardLeaderboard />}  />
                 <Route path="dashboard/announcements"     element={<Announcements />}         />
                 <Route path="dashboard/profile"           element={<MyProfile />}             />
