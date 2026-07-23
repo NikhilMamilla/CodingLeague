@@ -196,21 +196,6 @@ export default function DashboardLayout() {
             <Outlet />
           </div>
         </main>
-
-        {/* Mobile bottom nav */}
-        <nav className="lg:hidden bg-[#070d1a] border-t border-neon-cyan/10 flex shrink-0 safe-area-bottom">
-          {LINKS.map(({ to, label, icon: Icon, end }) => (
-            <NavLink key={to} to={to} end={end}
-              className={({ isActive }) =>
-                `flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[9px] font-body transition-colors ${
-                  isActive ? 'text-neon-cyan' : 'text-text-secondary'
-                }`}
-            >
-              <Icon size={16} />
-              <span className="truncate w-full text-center px-0.5">{label.split(' ')[0]}</span>
-            </NavLink>
-          ))}
-        </nav>
       </div>
     </div>
   );
