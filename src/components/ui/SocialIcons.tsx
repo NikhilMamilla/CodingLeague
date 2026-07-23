@@ -37,7 +37,7 @@ export function WebsiteIcon({ size = 16 }: { size?: number }) {
 }
 
 export const SOCIALS = [
-  { label: 'Website',   href: 'https://www.cbb.bvrit.ac.in/',                                    Icon: WebsiteIcon   },
+  { label: 'Website',   href: 'https://cbb-rust.vercel.app/',                                    Icon: WebsiteIcon   },
   { label: 'LinkedIn',  href: 'https://www.linkedin.com/in/coding-brigade-bvrit-402634229/',     Icon: LinkedInIcon  },
   { label: 'Instagram', href: 'https://www.instagram.com/coding_brigade',                        Icon: InstagramIcon },
   { label: 'X',         href: 'https://x.com/CBB_BVRIT',                                        Icon: XIcon         },

@@ -196,7 +196,7 @@ export default function CommunitySettings() {
             { key: 'instagram' as const, label: 'Instagram', placeholder: 'https://www.instagram.com/coding_brigade' },
             { key: 'linkedin' as const,  label: 'LinkedIn',  placeholder: 'https://www.linkedin.com/in/coding-brigade-bvrit-402634229/' },
             { key: 'twitter' as const,   label: 'X (Twitter)', placeholder: 'https://x.com/CBB_BVRIT' },
-            { key: 'website' as const,   label: 'Website',   placeholder: 'https://www.cbb.bvrit.ac.in/' },
+            { key: 'website' as const,   label: 'Website',   placeholder: 'https://cbb-rust.vercel.app/' },
           ]).map(({ key, label, placeholder }) => (
             <div key={key}>
               <label className="input-label">{label}</label>
