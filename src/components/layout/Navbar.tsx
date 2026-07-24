@@ -62,7 +62,7 @@ export default function Navbar() {
             : 'bg-transparent'
         }`}
       >
-        <nav className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
+        <nav className="w-full max-w-[92rem] mx-auto px-4 sm:px-6 lg:px-8 h-[72px] flex items-center justify-between gap-8">
 
           {/* Logo */}
           <Link to="/" onClick={() => setMobileOpen(false)} className="flex items-center gap-2.5 shrink-0">
@@ -74,13 +74,13 @@ export default function Navbar() {
           </Link>
 
           {/* ── Desktop Nav — hidden on smaller screens ── */}
-          <ul className="hidden lg:flex items-center gap-5 xl:gap-7">
+          <ul className="hidden xl:flex flex-1 items-center justify-center gap-3 2xl:gap-5">
             {NAV_LINKS.map((l) => (
               <li key={l.to}>
                 <NavLink
                   to={l.to}
                   className={({ isActive }) =>
-                    `text-[11px] uppercase tracking-widest font-body transition-colors duration-200 whitespace-nowrap ${
+                    `px-1.5 py-2 text-[11px] uppercase tracking-[0.18em] font-body transition-colors duration-200 whitespace-nowrap ${
                       isActive ? 'text-neon-cyan' : 'text-text-secondary hover:text-white'
                     }`
                   }
@@ -92,7 +92,7 @@ export default function Navbar() {
           </ul>
 
           {/* ── Desktop Auth ── */}
-          <div className="hidden lg:flex items-center gap-3 shrink-0">
+          <div className="hidden xl:flex items-center gap-4 shrink-0">
             {user ? (
               <div className="relative">
                 <button
@@ -130,7 +130,7 @@ export default function Navbar() {
               </div>
             ) : (
               <>
-                <Link to="/login"    className="text-text-secondary hover:text-white text-xs uppercase tracking-widest font-body transition-colors">Login</Link>
+                <Link to="/login"    className="text-text-secondary hover:text-white text-xs uppercase tracking-widest font-body transition-colors px-1 py-2">Login</Link>
                 <Link to="/register" className="btn-primary text-xs py-2 px-5">Register</Link>
               </>
             )}
@@ -138,7 +138,7 @@ export default function Navbar() {
 
           {/* ── Hamburger (mobile + tablet) ── */}
           <button
-            className="lg:hidden text-text-secondary hover:text-neon-cyan transition-colors z-50 relative"
+            className="xl:hidden text-text-secondary hover:text-neon-cyan transition-colors z-50 relative"
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label="Toggle menu"
           >
@@ -150,7 +150,7 @@ export default function Navbar() {
 
       {/* ── Fullscreen mobile overlay ── */}
       <div
-        className={`fixed inset-0 z-40 lg:hidden flex flex-col items-center justify-center
+        className={`fixed inset-0 z-40 xl:hidden flex flex-col items-center justify-center
           bg-midnight/98 backdrop-blur-xl
           transition-all duration-300 ease-in-out
           ${mobileOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
