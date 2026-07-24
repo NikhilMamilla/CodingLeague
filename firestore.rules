@@ -1,0 +1,141 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function getUserDoc(userId) {
+      return get(/databases/$(database)/documents/participants/$(userId)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (getUserDoc(request.auth.uid).role == 'admin' || getUserDoc(request.auth.uid).role == 'super_admin');
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && getUserDoc(request.auth.uid).role == 'super_admin';
+    }
+
+    // ── Participants ──────────────────────────────────────────────────────────
+    match /participants/{userId} {
+      // Public leaderboard/profile reads are allowed. If you want to hide
+      // personal fields (email, phone) from public, split them into a sub-collection.
+      allow read: if true;
+
+      // Registration: the authenticated user may create only their own doc and
+      // must be assigned the 'participant' role.
+      allow create: if isOwner(userId)
+        && request.resource.data.role == 'participant'
+        && !request.resource.data.keys().hasAny(['adminNote']);
+
+      // Participants can update their own editable profile fields only.
+      // Founding-member fields and role/rating/contest counters are protected.
+      allow update: if isOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly([
+              'bio', 'github', 'linkedin',
+              'hackerrankUsername', 'codechefUsername', 'leetcodeUsername',
+              'codeforcesHandle', 'gfgUsername',
+              'hackerrankUrl', 'codechefUrl', 'leetcodeUrl', 'codeforcesUrl', 'gfgUrl',
+              'photoURL'
+            ]);
+
+      // Admins and super-admins can update any participant (including badges,
+      // founding-member fields, ratings, etc.).
+      allow update: if isAdmin();
+
+      // Only super-admins can delete participant accounts.
+      allow delete: if isSuperAdmin();
+    }
+
+    // ── Founding Member Settings ──────────────────────────────────────────────
+    match /settings/foundingMembers {
+      // Public pages and dashboards read the live slot counter/settings.
+      allow read: if true;
+      // Only admins can change the settings.
+      allow write: if isAdmin();
+    }
+
+    // ── Atomic Counters ───────────────────────────────────────────────────────
+    function foundingMembersMax() {
+      const settings = get(/databases/$(database)/documents/settings/foundingMembers);
+      return (settings.data.keys().hasAll(['maxFoundingMembers'])
+              && settings.data.maxFoundingMembers is number)
+        ? settings.data.maxFoundingMembers
+        : 0;
+    }
+
+    match /counters/{counterId} {
+      allow read: if isSignedIn();
+
+      // Creating the counter seeds it from the current real-world count.
+      // This lets registration start at the correct rank when existing members
+      // already have founding status (e.g. 23 present → counter seeded to 23).
+      allow create: if isSignedIn()
+        && counterId in ['participantId', 'foundingMembers']
+        && request.resource.data.keys().hasOnly(['value'])
+        && request.resource.data.value is number
+        && request.resource.data.value >= 0
+        && (
+          counterId == 'participantId'
+            ? request.resource.data.value <= 999999
+            : request.resource.data.value <= foundingMembersMax()
+        );
+
+      // After creation, the counter may only advance by exactly 1.
+      allow update: if isSignedIn()
+        && counterId in ['participantId', 'foundingMembers']
+        && request.resource.data.keys().hasOnly(['value'])
+        && request.resource.data.value is number
+        && request.resource.data.value == resource.data.value + 1;
+
+      // Admins may reset the counter (e.g. when reassigning founding slots).
+      allow delete: if isAdmin();
+    }
+
+    // ── Certificates ──────────────────────────────────────────────────────────
+    match /certificates/{certId} {
+      allow read: if isSignedIn()
+        && (resource.data.email == request.auth.token.email
+            || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── Contests & Results ────────────────────────────────────────────────────
+    match /contests/{contestId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /contestResults/{resultId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Announcements ─────────────────────────────────────────────────────────
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ── Settings (general) ────────────────────────────────────────────────────
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ── Other collections ─────────────────────────────────────────────────────
+    // Add custom rules below as the app grows (badges, sponsors, etc.).
+    match /{document=**} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+  }
+}

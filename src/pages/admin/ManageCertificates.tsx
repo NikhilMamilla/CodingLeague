@@ -9,7 +9,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import type { Certificate, Participant, CertificateType } from '../../types';
 import {
   Award, Plus, Search, Filter, Trash2, Eye, Download, Mail,
-  CheckCircle2, Clock, AlertTriangle, X, Loader2, Sparkles
+  CheckCircle2, Clock, AlertTriangle, X, Loader2, Sparkles, Crown
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
@@ -20,6 +20,7 @@ const CERT_TYPES: CertificateType[] = [
   'Participation',
   'Winner',
   'Monthly Champion',
+  'Founding Member',
 ];
 
 export default function ManageCertificates() {
@@ -210,6 +211,21 @@ export default function ManageCertificates() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              const foundingUids = participants.filter((p) => p.foundingMember).map((p) => p.uid);
+              if (foundingUids.length === 0) {
+                toast.error('No founding members found');
+                return;
+              }
+              setCertType('Founding Member');
+              setSelectedUids(foundingUids);
+              setShowCreateModal(true);
+            }}
+            className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5 bg-gold/10 border-gold/30 text-gold hover:bg-gold/20"
+          >
+            <Crown size={14} /> Issue Founding Certs
+          </button>
           <button
             onClick={() => {
               setSelectedUids(participants.slice(0, 1).map((p) => p.uid));
@@ -538,6 +554,19 @@ export default function ManageCertificates() {
                       onChange={(e) => setIssuedDateStr(e.target.value)}
                     />
                     <p className="text-[10px] text-text-secondary mt-0.5">Template: Monthlychampion.png (Fills: for the month of <span className="text-white font-bold">{issuedDateStr || 'August 2026'}</span>)</p>
+                  </div>
+                )}
+
+                {certType === 'Founding Member' && (
+                  <div>
+                    <label className="input-label">Issued Date *</label>
+                    <input
+                      className="input-field text-xs font-semibold text-gold"
+                      placeholder="e.g. 29th August 2026"
+                      value={issuedDateStr}
+                      onChange={(e) => setIssuedDateStr(e.target.value)}
+                    />
+                    <p className="text-[10px] text-text-secondary mt-0.5">Template: Participation.png (Fills: Founding Member title, name, season {season})</p>
                   </div>
                 )}
 

@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Crown, Star, Calendar, Zap } from 'lucide-react';
+import { Crown, Star, Calendar, Zap, Users } from 'lucide-react';
 import CBBLogo from '../../components/ui/CBBLogo';
 
 const AWARDS = [
@@ -44,6 +44,20 @@ export default function HallOfFame() {
           </div>
           <Link to="/register" className="btn-primary inline-flex items-center gap-2 text-xs px-6">
             <Zap size={13} /> Register Now — Write Your Story
+          </Link>
+        </div>
+
+        {/* Founding Members link */}
+        <div className="card border-gold/20 text-center py-8 mb-8" style={{ boxShadow: '0 0 30px rgba(244,196,48,0.06)' }}>
+          <div className="w-14 h-14 rounded-full bg-gold/10 border border-gold/30 flex items-center justify-center mx-auto mb-4">
+            <Users size={26} className="text-gold" />
+          </div>
+          <h2 className="heading-sm text-sm mb-2">Meet the Founding Members</h2>
+          <p className="text-text-secondary text-xs leading-relaxed max-w-md mx-auto mb-5">
+            Celebrate the earliest supporters of CWCL. Founding Members are permanently recognized with a special badge and certificate.
+          </p>
+          <Link to="/founding-members" className="btn-primary inline-flex items-center gap-2 text-xs px-6 bg-gold/10 border-gold/30 text-gold hover:bg-gold/20">
+            <Crown size={13} /> View Founding Members
           </Link>
         </div>
 

@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, Eye, EyeOff, ArrowLeft, Code2, ExternalLink, CheckCircle2, XCircle, Loader2, Send } from 'lucide-react';
+import { ChevronRight, Eye, EyeOff, ArrowLeft, Code2, ExternalLink, CheckCircle2, XCircle, Loader2, Send, Crown } from 'lucide-react';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc, collection, query, orderBy, limit, getDocs, getDoc } from 'firebase/firestore';
+import { doc, setDoc, addDoc, serverTimestamp, collection, query, where, orderBy, limit, getDocs, getDoc, runTransaction } from 'firebase/firestore';
 import { auth, db } from '../../lib/firebase';
 import { getTierFromRating } from '../../types';
 import CBBLogo from '../../components/ui/CBBLogo';
+import FoundingMemberBadge from '../../components/ui/FoundingMemberBadge';
+import { reserveFoundingRank, type FoundingReservation } from '../../lib/foundingMembers';
 import toast from 'react-hot-toast';
 import { extractHandle, verifyPlatformProfile, type VerificationResult } from '../../lib/profileVerification';
 
@@ -79,19 +81,48 @@ const PLATFORMS = [
 ] as const;
 
 async function generateParticipantId(): Promise<string> {
-  try {
-    const q = query(collection(db, 'participants'), orderBy('participantId', 'desc'), limit(1));
-    const snap = await getDocs(q);
-    if (snap.empty) return 'CBB000001';
-    const last = snap.docs[0].data().participantId as string;
-    if (!last || !last.startsWith('CBB')) return 'CBB000001';
-    const num = parseInt(last.replace('CBB', ''), 10);
-    if (isNaN(num)) return 'CBB000001';
-    return 'CBB' + String(num + 1).padStart(6, '0');
-  } catch {
-    const ts = Date.now().toString().slice(-6);
-    return 'CBB' + ts;
+  const counterRef = doc(db, 'counters', 'participantId');
+
+  // Initialize the counter once if it doesn't exist, using the current max participant ID
+  const counterSnap = await getDoc(counterRef);
+  if (!counterSnap.exists()) {
+    try {
+      const q = query(collection(db, 'participants'), orderBy('participantId', 'desc'), limit(1));
+      const snap = await getDocs(q);
+      let current = 0;
+      if (!snap.empty) {
+        const last = snap.docs[0].data().participantId as string;
+        if (last && last.startsWith('CBB')) {
+          const num = parseInt(last.replace('CBB', ''), 10);
+          if (!isNaN(num)) current = num;
+        }
+      }
+      await setDoc(counterRef, { value: current });
+    } catch {
+      // If initialization races, the transaction below will still work
+    }
   }
+
+  // Atomically increment the counter and verify the ID is not already in use.
+  // If a duplicate is found (e.g. from the existing bad data), retry with the next value.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const newValue = await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(counterRef);
+      const current = snap.exists() ? (snap.data().value ?? 0) : 0;
+      const next = current + 1;
+      transaction.set(counterRef, { value: next });
+      return next;
+    });
+
+    const candidateId = 'CBB' + String(newValue).padStart(6, '0');
+    const existing = await getDocs(
+      query(collection(db, 'participants'), where('participantId', '==', candidateId), limit(1))
+    );
+    if (existing.empty) return candidateId;
+  }
+
+  // Fallback should never hit if the counter is correct
+  throw new Error('Unable to generate unique participant ID');
 }
 
 function StepDot({ n, current }: { n: number; current: number }) {
@@ -115,6 +146,8 @@ export default function Register() {
   const [verifyingMap,  setVerifyingMap]  = useState<Record<string, boolean>>({});
   const [verifyResults, setVerifyResults] = useState<Record<string, VerificationResult>>({});
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showFoundingModal, setShowFoundingModal] = useState(false);
+  const [foundingData, setFoundingData] = useState<FoundingReservation | null>(null);
   const [whatsappLink, setWhatsappLink] = useState('');
   const navigate = useNavigate();
 
@@ -209,6 +242,7 @@ export default function Register() {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
       await updateProfile(cred.user, { displayName: form.fullName });
       const participantId = await generateParticipantId();
+      const foundingReservation = await reserveFoundingRank();
 
       // Extract clean handles for sync
       const hrHandle = extractHandle('hackerrankUsername', form.hackerrankUsername);
@@ -217,7 +251,7 @@ export default function Register() {
       const cfHandle = form.codeforcesHandle ? extractHandle('codeforcesHandle', form.codeforcesHandle) : null;
       const gfgHandle= form.gfgUsername      ? extractHandle('gfgUsername',        form.gfgUsername)      : null;
 
-      await setDoc(doc(db, 'participants', cred.user.uid), {
+      const participantDoc: any = {
         uid: cred.user.uid, participantId,
         fullName: form.fullName, email: form.email, phone: form.phone,
         college: form.college, university: form.university, year: form.year,
@@ -240,11 +274,46 @@ export default function Register() {
         // Meta
         photoURL: null, bio: null,
         rating: 800, tier: getTierFromRating(800),
-        role: 'participant', badges: [],
+        role: 'participant',
         contestsParticipated: 0, attendance: 0,
         createdAt: new Date().toISOString(), emailVerified: false,
-      });
+      };
+
+      if (foundingReservation) {
+        const awardedAt = new Date().toISOString();
+        participantDoc.foundingMember = true;
+        participantDoc.foundingRank = foundingReservation.rank;
+        participantDoc.foundingAwardedAt = awardedAt;
+        participantDoc.foundingSeasonId = foundingReservation.seasonId;
+        participantDoc.badges = [{
+          type: 'founding_member',
+          label: 'Founding Member',
+          emoji: '🏅',
+          awardedAt,
+        }];
+      } else {
+        participantDoc.foundingMember = false;
+        participantDoc.badges = [];
+      }
+
+      await setDoc(doc(db, 'participants', cred.user.uid), participantDoc);
       toast.success(`Welcome ${form.fullName}! Your ID: ${participantId}`);
+
+      // Create notification announcement for founding members
+      if (foundingReservation) {
+        try {
+          await addDoc(collection(db, 'announcements'), {
+            title: 'Founding Member Awarded',
+            body: `Congratulations! You are among the first registered participants of CWCL and have received Founding Member recognition for season ${foundingReservation.seasonId}.`,
+            category: 'Results',
+            createdBy: 'System',
+            createdAt: serverTimestamp(),
+          });
+        } catch { /* ignore announcement failure */ }
+        setFoundingData(foundingReservation);
+        setShowFoundingModal(true);
+        return;
+      }
 
       // Fetch WhatsApp announcement link and show success modal
       try {
@@ -513,6 +582,36 @@ export default function Register() {
         </p>
       </div>
     </div>
+
+    {/* ── Founding Member Welcome Modal ── */}
+    {showFoundingModal && foundingData && (
+      <div className="fixed inset-0 z-50 bg-midnight/90 backdrop-blur-sm flex items-center justify-center p-4"
+        onClick={() => { setShowFoundingModal(false); navigate('/dashboard'); }}>
+        <div className="bg-[#0a1628] border border-gold/30 rounded-2xl w-full max-w-md p-8 text-center"
+          onClick={e => e.stopPropagation()}>
+          <FoundingMemberBadge size={180} />
+          <div className="mt-4 mb-1">
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-gold/10 border border-gold/30 text-gold text-xs font-bold">
+              <Crown size={12} /> Founding Member #{foundingData.rank}
+            </span>
+          </div>
+          <h2 className="heading-sm mt-5 mb-2 text-gold">Congratulations!</h2>
+          <p className="text-text-secondary text-sm leading-relaxed mb-6">
+            You are officially one of the Founding Members of the inaugural CBB Weekly Coding League (CWCL) {foundingData.seasonLabel}.
+            You have received an exclusive Founding Member Badge and Recognition Certificate.
+          </p>
+          <div className="space-y-3">
+            <FoundingMemberBadge size={160} downloadable />
+            <button
+              onClick={() => { setShowFoundingModal(false); navigate('/dashboard'); }}
+              className="btn-primary w-full text-xs"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* ── Post-Registration Success Modal ── */}
     {showSuccessModal && (

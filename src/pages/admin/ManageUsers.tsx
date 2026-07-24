@@ -3,18 +3,30 @@ import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { Participant } from '../../types';
 import { BADGE_META } from '../../types';
-import { Search } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import {
+  Search, User, GraduationCap, Mail, Phone, MapPin, Code2,
+  X, Shield, ExternalLink, Link2,
+} from 'lucide-react';
+import { getCanonicalProfileUrl } from '../../lib/profileVerification';
 
 const TIER_CLASS: Record<string, string> = {
   Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
   Expert: 'tier-expert', Master: 'tier-master', Grandmaster: 'tier-grandmaster',
 };
 
+const PLATFORM_CFG = [
+  { key: 'hackerrankUsername' as const, label: 'HackerRank', color: '#00EA64', required: true },
+  { key: 'codechefUsername'   as const, label: 'CodeChef',   color: '#B17A50', required: true },
+  { key: 'leetcodeUsername'   as const, label: 'LeetCode',   color: '#FFA116', required: true },
+  { key: 'codeforcesHandle'   as const, label: 'Codeforces', color: '#1890FF', required: false },
+  { key: 'gfgUsername'        as const, label: 'GeeksforGeeks', color: '#2F8D46', required: false },
+];
+
 export default function ManageUsers() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [loading, setLoading] = useState(true);
   const [search,  setSearch]  = useState('');
+  const [viewing, setViewing] = useState<Participant | null>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'participants'), orderBy('createdAt', 'desc'));
@@ -115,8 +127,12 @@ export default function ManageUsers() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <Link to={`/profile/${p.participantId}`} target="_blank"
-                      className="text-neon-cyan text-[10px] hover:underline">View →</Link>
+                    <button
+                      onClick={() => setViewing(p)}
+                      className="text-neon-cyan text-[10px] hover:underline"
+                    >
+                      View Profile →
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -124,6 +140,183 @@ export default function ManageUsers() {
           </table>
         </div>
       </div>
+
+      {/* ── Participant Profile Modal ── */}
+      {viewing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={e => { if (e.target === e.currentTarget) setViewing(null); }}>
+          <div className="bg-midnight border border-neon-cyan/20 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto no-scrollbar shadow-[0_0_40px_rgba(0,229,255,0.12)]">
+
+            {/* Modal header */}
+            <div className="sticky top-0 z-10 bg-midnight/95 border-b border-neon-cyan/10 px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-neon-cyan/10 border border-neon-cyan/30 overflow-hidden flex items-center justify-center">
+                  {viewing.photoURL
+                    ? <img src={viewing.photoURL} alt="" className="w-full h-full object-cover" />
+                    : <span className="font-heading text-xl text-neon-cyan font-bold">
+                        {viewing.fullName.charAt(0).toUpperCase()}
+                      </span>
+                  }
+                </div>
+                <div>
+                  <h2 className="font-heading text-sm font-bold text-white">{viewing.fullName}</h2>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className={TIER_CLASS[viewing.tier] ?? 'tier-beginner'}>{viewing.tier}</span>
+                    <span className="font-numbers text-[11px] text-text-secondary bg-white/5 px-2 py-0.5 rounded">
+                      {viewing.participantId}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button onClick={() => setViewing(null)} className="text-text-secondary hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-6">
+
+              {/* Stats */}
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: 'Rating', value: viewing.rating, color: 'text-neon-cyan' },
+                  { label: 'Contests', value: viewing.contestsParticipated, color: 'text-electric-blue' },
+                  { label: 'Badges', value: viewing.badges?.length ?? 0, color: 'text-gold' },
+                ].map(s => (
+                  <div key={s.label} className="card text-center py-3">
+                    <div className={`stat-number text-xl ${s.color}`}>{s.value}</div>
+                    <div className="text-text-secondary/60 text-[10px] uppercase tracking-wider mt-0.5">{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Account Details */}
+              <section>
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-neon-cyan/10">
+                  <div className="w-7 h-7 rounded-lg bg-neon-cyan/10 flex items-center justify-center">
+                    <GraduationCap size={13} className="text-neon-cyan" />
+                  </div>
+                  <h3 className="font-heading text-sm font-bold text-neon-cyan">Account Details</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { icon: User,          label: 'Full Name',  value: viewing.fullName   },
+                    { icon: Mail,          label: 'Email',      value: viewing.email      },
+                    { icon: Phone,         label: 'Phone',      value: viewing.phone      },
+                    { icon: GraduationCap, label: 'College',    value: viewing.college    },
+                    { icon: GraduationCap, label: 'University', value: viewing.university },
+                    { icon: GraduationCap, label: 'Branch',     value: viewing.branch     },
+                    { icon: GraduationCap, label: 'Year',       value: viewing.year       },
+                    { icon: MapPin,        label: 'City',       value: viewing.city       },
+                    { icon: MapPin,        label: 'State',      value: viewing.state      },
+                    { icon: Mail,          label: 'Email Verified', value: viewing.emailVerified ? 'Yes' : 'No' },
+                  ].map(({ icon: Icon, label, value }) => (
+                    <div key={label} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5">
+                      <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
+                        <Icon size={10} className="shrink-0" /> {label}
+                      </label>
+                      <div className="text-white text-xs truncate">{value ?? '—'}</div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Bio & Social */}
+              <section>
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-neon-cyan/10">
+                  <div className="w-7 h-7 rounded-lg bg-neon-cyan/10 flex items-center justify-center">
+                    <Link2 size={13} className="text-neon-cyan" />
+                  </div>
+                  <h3 className="font-heading text-sm font-bold text-neon-cyan">About Me & Social Links</h3>
+                </div>
+                <div className="space-y-3">
+                  <div className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5">
+                    <label className="text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1 block">Short Bio</label>
+                    <div className="text-white text-xs leading-relaxed whitespace-pre-wrap">{viewing.bio || 'No bio added.'}</div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {[
+                      { label: 'GitHub',   url: viewing.github   },
+                      { label: 'LinkedIn', url: viewing.linkedin },
+                    ].map(({ label, url }) => (
+                      <div key={label} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5">
+                        <label className="text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1 block">{label}</label>
+                        {url ? (
+                          <a href={url} target="_blank" rel="noopener noreferrer"
+                            className="text-neon-cyan text-xs flex items-center gap-1 hover:underline truncate">
+                            {url} <ExternalLink size={10} />
+                          </a>
+                        ) : (
+                          <div className="text-text-secondary/50 text-xs">Not linked</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              {/* Competitive Profiles */}
+              <section>
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-neon-cyan/10">
+                  <div className="w-7 h-7 rounded-lg bg-neon-cyan/10 flex items-center justify-center">
+                    <Code2 size={13} className="text-neon-cyan" />
+                  </div>
+                  <h3 className="font-heading text-sm font-bold text-neon-cyan">Competitive Profiles & Handles</h3>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {PLATFORM_CFG.map(p => {
+                    const handle = (viewing as any)[p.key] as string | undefined;
+                    const url = handle ? getCanonicalProfileUrl(p.key, handle) : null;
+                    return (
+                      <div key={p.key} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2.5">
+                        <label className="flex items-center gap-2 text-[10px] uppercase tracking-wider mb-1.5" style={{ color: p.color }}>
+                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
+                          {p.label} {p.required && <span className="text-red-400">*</span>}
+                        </label>
+                        {handle ? (
+                          <a href={url ?? '#'} target="_blank" rel="noopener noreferrer"
+                            className="text-neon-cyan text-xs flex items-center gap-1 hover:underline truncate">
+                            @{handle} <ExternalLink size={10} />
+                          </a>
+                        ) : (
+                          <div className="text-text-secondary/50 text-xs">not linked</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* Badges */}
+              <section>
+                <div className="flex items-center gap-2 mb-3 pb-2 border-b border-neon-cyan/10">
+                  <div className="w-7 h-7 rounded-lg bg-neon-cyan/10 flex items-center justify-center">
+                    <Shield size={13} className="text-neon-cyan" />
+                  </div>
+                  <h3 className="font-heading text-sm font-bold text-neon-cyan">Badges Earned</h3>
+                </div>
+                {viewing.badges?.length > 0 ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                    {viewing.badges.map(b => {
+                      const meta = BADGE_META[b.type];
+                      return (
+                        <div key={b.type}
+                          title={`${meta?.label || b.label} — Earned ${b.awardedAt ? new Date(b.awardedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}`}
+                          className="flex flex-col items-center gap-1 p-3 rounded-xl bg-white/5 border border-neon-cyan/10">
+                          <span className="text-xl">{meta?.emoji || b.emoji || '🏅'}</span>
+                          <span className="text-[9px] text-text-secondary text-center leading-tight">{meta?.label || b.label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-text-secondary/50 text-xs">No badges earned yet.</div>
+                )}
+              </section>
+
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

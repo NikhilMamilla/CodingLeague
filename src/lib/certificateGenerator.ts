@@ -46,6 +46,8 @@ export async function renderCertificate(
     templatePath = '/Template.png';
   } else if (typeKey.includes('monthly')) {
     templatePath = '/Monthlychampion.png';
+  } else if (typeKey.includes('founding')) {
+    templatePath = '/FoundingMemberCertificate.png';
   }
 
   // Load official base template image
@@ -121,6 +123,27 @@ export async function renderCertificate(
     ctx.font = 'bold 13px monospace, "Courier New", sans-serif';
     ctx.fillText(certIdStr, width * 0.866, height * 0.862);
 
+  } else if (typeKey.includes('founding')) {
+    // ── FOUNDING MEMBER TEMPLATE (/FoundingMemberCertificate.png) ──
+    // The uploaded template already contains the title, season, signatures,
+    // QR placeholder and verification URL. We overlay only the dynamic fields.
+
+    // Participant Name (center ribbon area)
+    ctx.fillStyle = '#0B132B';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold italic 64px "Times New Roman", Georgia, serif';
+    ctx.fillText(nameStr, width * 0.500, height * 0.485);
+
+    // Certificate ID (bottom-right certificate ID line)
+    ctx.fillStyle = '#0B132B';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 15px monospace, "Courier New", sans-serif';
+    ctx.fillText(certIdStr, width * 0.875, height * 0.792);
+
+    // Issue date (small line under certificate ID)
+    ctx.fillStyle = '#0B132B';
+    ctx.font = 'bold 13px Inter, sans-serif';
+    ctx.fillText(dateStr, width * 0.875, height * 0.822);
   } else {
     // ── PARTICIPATION TEMPLATE (/Participation.png) ──
     // Participant Name
@@ -152,6 +175,25 @@ export async function generateCertificateBlob(data: CertificateData): Promise<Bl
       if (blob) resolve(blob);
       else reject(new Error('Failed to render certificate blob'));
     }, 'image/png');
+  });
+}
+
+/**
+ * Convenience helper to download a Founding Member certificate.
+ */
+export async function downloadFoundingCertificate(data: {
+  certificateId: string;
+  participantName: string;
+  season?: string;
+  issuedDate?: string;
+}): Promise<void> {
+  return downloadCertificate({
+    certificateId: data.certificateId,
+    participantName: data.participantName,
+    certificateType: 'Founding Member',
+    contestName: 'CBB Weekly Coding League',
+    season: data.season,
+    issuedDate: data.issuedDate,
   });
 }
 

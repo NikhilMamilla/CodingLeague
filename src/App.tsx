@@ -16,7 +16,8 @@ const About       = lazy(() => import('./pages/public/About'));
 const Schedule    = lazy(() => import('./pages/public/Schedule'));
 const Leaderboard = lazy(() => import('./pages/public/Leaderboard'));
 const Winners     = lazy(() => import('./pages/public/Winners'));
-const HallOfFame  = lazy(() => import('./pages/public/HallOfFame'));
+const HallOfFame     = lazy(() => import('./pages/public/HallOfFame'));
+const FoundingMembers = lazy(() => import('./pages/public/FoundingMembers'));
 const Rules       = lazy(() => import('./pages/public/Rules'));
 const FAQs        = lazy(() => import('./pages/public/FAQs'));
 const Gallery     = lazy(() => import('./pages/public/Gallery'));
@@ -47,6 +48,8 @@ const ManageSponsors      = lazy(() => import('./pages/admin/ManageSponsors'));
 const ManageAnnouncements = lazy(() => import('./pages/admin/ManageAnnouncements'));
 const SeedContests        = lazy(() => import('./pages/admin/SeedContests'));
 const CommunitySettings   = lazy(() => import('./pages/admin/CommunitySettings'));
+const FoundingMemberSettings = lazy(() => import('./pages/admin/FoundingMemberSettings'));
+const FoundingMembersAdmin   = lazy(() => import('./pages/admin/FoundingMembersAdmin'));
 
 function App() {
   return (
@@ -73,8 +76,9 @@ function App() {
               <Route path="schedule"               element={<Schedule />}    />
               <Route path="leaderboard"            element={<Leaderboard />} />
               <Route path="winners"                element={<Winners />}     />
-              <Route path="hall-of-fame"           element={<HallOfFame />}  />
-              <Route path="rules"                  element={<Rules />}       />
+              <Route path="hall-of-fame"           element={<HallOfFame />}     />
+              <Route path="founding-members"       element={<FoundingMembers />} />
+              <Route path="rules"                  element={<Rules />}          />
               <Route path="faqs"                   element={<FAQs />}        />
               <Route path="gallery"                element={<Gallery />}     />
               <Route path="sponsors"               element={<Sponsors />}    />
@@ -114,6 +118,8 @@ function App() {
                 <Route path="admin/announcements"       element={<ManageAnnouncements />} />
                 <Route path="admin/seed"                element={<SeedContests />}        />
                 <Route path="admin/community"          element={<CommunitySettings />}   />
+                <Route path="admin/founding-members"   element={<FoundingMemberSettings />} />
+                <Route path="admin/founding-members-list" element={<FoundingMembersAdmin />} />
               </Route>
             </Route>
 

@@ -5,11 +5,12 @@ import { db, storage } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   Camera, Save, ExternalLink, Code2, User,
-  GraduationCap, MapPin, Phone, Mail, Shield, Link,
+  GraduationCap, MapPin, Phone, Mail, Shield, Link, Crown, Star,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { BADGE_META } from '../../types';
 import { extractHandle, getCanonicalProfileUrl } from '../../lib/profileVerification';
+import FoundingMemberBadge from '../../components/ui/FoundingMemberBadge';
 
 const TIER_CLASS: Record<string, string> = {
   Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
@@ -153,10 +154,10 @@ export default function MyProfile() {
         <Card title="Identity" icon={User}>
           <div className="flex items-center gap-5">
             <div className="relative shrink-0">
-              <div className="w-20 h-20 rounded-full bg-neon-cyan/10 border-2 border-neon-cyan/30 overflow-hidden flex items-center justify-center">
+              <div className={`w-20 h-20 rounded-full bg-neon-cyan/10 overflow-hidden flex items-center justify-center ${participant.foundingMember ? 'founding-avatar' : 'border-2 border-neon-cyan/30'}`}>
                 {participant.photoURL
                   ? <img src={participant.photoURL} alt="" className="w-full h-full object-cover" />
-                  : <span className="font-heading text-3xl text-neon-cyan font-bold">
+                  : <span className={`font-heading text-3xl font-bold ${participant.foundingMember ? 'text-gold' : 'text-neon-cyan'}`}>
                       {participant.fullName.charAt(0).toUpperCase()}
                     </span>
                 }
@@ -174,6 +175,11 @@ export default function MyProfile() {
                 <span className="font-numbers text-[11px] text-text-secondary bg-white/5 px-2 py-0.5 rounded">
                   {participant.participantId}
                 </span>
+                {participant.foundingMember && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gold/10 border border-gold/30 text-gold text-[10px] font-medium">
+                    <Crown size={10} /> Founding Member #{participant.foundingRank}
+                  </span>
+                )}
               </div>
               <div className="text-text-secondary text-[11px] mt-1.5">{participant.college}</div>
               <div className="text-text-secondary/60 text-[10px]">{participant.branch} · {participant.year}</div>
@@ -201,6 +207,21 @@ export default function MyProfile() {
             </div>
           </div>
         </Card>
+
+        {/* ── Founding Member Badge Card ── */}
+        {participant.foundingMember && (
+          <Card title="Founding Member" icon={Crown} className="border-gold/20">
+            <div className="flex flex-col items-center text-center">
+              <FoundingMemberBadge size={160} />
+              <p className="text-gold text-xs font-medium mt-3">
+                #{participant.foundingRank} of the inaugural season
+              </p>
+              <p className="text-text-secondary/60 text-[10px] mt-1">
+                Awarded {participant.foundingAwardedAt ? new Date(participant.foundingAwardedAt).toLocaleDateString('en-IN') : ''}
+              </p>
+            </div>
+          </Card>
+        )}
 
         <Card title="Badges Earned" icon={Shield}>
           {participant.badges?.length > 0 ? (
@@ -395,6 +416,24 @@ export default function MyProfile() {
         <Save size={15} />
         {saving ? 'Saving…' : 'Save Profile & Handles'}
       </button>
+
+      {/* ── Achievements Timeline ── */}
+      {participant.foundingMember && (
+        <Card title="Achievements" icon={Star}>
+          <div className="relative pl-4 border-l-2 border-gold/30 space-y-4">
+            <div className="relative">
+              <span className="absolute -left-[21px] top-1 w-3 h-3 rounded-full bg-gold border-2 border-midnight" />
+              <div className="text-gold text-xs font-bold">Founding Member</div>
+              <div className="text-text-secondary/60 text-[10px]">
+                Season {participant.foundingSeasonId || '2026–27'} · Rank #{participant.foundingRank}
+              </div>
+              <div className="text-text-secondary/40 text-[10px]">
+                {participant.foundingAwardedAt ? new Date(participant.foundingAwardedAt).toLocaleDateString('en-IN') : ''}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
 
     </div>
   );

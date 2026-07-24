@@ -41,6 +41,9 @@ const AUTO_CRITERIA: Record<BadgeType, ((results: ContestResult[], p: Participan
 
   // 👑  Monthly champion — admin-only, never auto-awarded
   monthly_champion: null,
+
+  // 🏅  Founding Member — assigned during registration or admin backfill
+  founding_member: null,
 };
 
 // ─── Core helpers ─────────────────────────────────────────────────────────────

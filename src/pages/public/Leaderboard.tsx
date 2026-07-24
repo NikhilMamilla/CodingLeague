@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Crown } from 'lucide-react';
 import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { Participant } from '../../types';
@@ -86,7 +86,14 @@ export default function Leaderboard() {
                           {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-white font-medium">{p.fullName}</td>
+                      <td className="px-4 py-3 text-white font-medium">
+                        <div className="flex items-center gap-1.5">
+                          {p.fullName}
+                          {p.foundingMember && (
+                            <span title="Founding Member" className="text-gold"><Crown size={12} /></span>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-3 text-text-secondary">{p.college}</td>
                       <td className="px-4 py-3 text-center">
                         {(() => {

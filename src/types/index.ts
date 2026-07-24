@@ -58,6 +58,11 @@ export interface Participant {
   monthlyPoints?: number;      // optional live monthly LP value
   createdAt: string;           // ISO date string
   emailVerified: boolean;
+  // Founding Member Recognition
+  foundingMember?: boolean;
+  foundingRank?: number;
+  foundingAwardedAt?: string;  // ISO date string
+  foundingSeasonId?: string;
 }
 
 // ─── Contest ──────────────────────────────────────────────────────────────────
@@ -145,7 +150,8 @@ export type BadgeType =
   | 'top_10'
   | 'perfect_score'
   | 'six_month_streak'
-  | 'monthly_champion';
+  | 'monthly_champion'
+  | 'founding_member';
 
 export interface Badge {
   type: BadgeType;
@@ -161,6 +167,7 @@ export const BADGE_META: Record<BadgeType, { label: string; emoji: string }> = {
   perfect_score:    { label: 'Perfect Score',     emoji: '🎯' },
   six_month_streak: { label: '6 Month Streak',    emoji: '💎' },
   monthly_champion: { label: 'Monthly Champion',  emoji: '👑' },
+  founding_member:  { label: 'Founding Member',   emoji: '🏅' },
 };
 
 // ─── League Points Table ──────────────────────────────────────────────────────
@@ -252,7 +259,8 @@ export interface Announcement {
 export type CertificateType =
   | 'Participation'
   | 'Winner'
-  | 'Monthly Champion';
+  | 'Monthly Champion'
+  | 'Founding Member';
 
 export type CertificateStatus = 'Pending' | 'Issued';
 

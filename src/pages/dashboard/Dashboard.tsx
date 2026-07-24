@@ -4,15 +4,18 @@ import {
   TrendingUp, Trophy, Calendar, Award, Zap,
   Star, Code2, ExternalLink, User, ChevronRight,
   Megaphone, Crown, Info, Users, X, Send,
+  Sparkles, Download,
 } from 'lucide-react';
 import {
   collection, query, where, orderBy, limit,
   onSnapshot, doc, getDoc,
 } from 'firebase/firestore';
+import { downloadFoundingCertificate } from '../../lib/certificateGenerator';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Contest, ContestResult, Announcement } from '../../types';
 import { BADGE_META } from '../../types';
+import toast from 'react-hot-toast';
 
 const TIER_CFG: Record<string, { cls: string; next: number; min: number; nextName: string }> = {
   Beginner:               { cls: 'text-gray-400 font-semibold',    next: 900,   min: 800,  nextName: 'Explorer'              },
@@ -88,6 +91,14 @@ function CountdownTimer({ date, startTime }: { date: string; startTime: string }
 interface LeaderRow {
   uid: string; participantId: string; fullName: string;
   college: string; rating: number; tier: string; contestsParticipated: number;
+  foundingMember?: boolean;
+}
+
+interface FoundingSlotState {
+  enabled: boolean;
+  claimed: number;
+  max: number;
+  seasonLabel: string;
 }
 interface AnnouncementRow extends Announcement { id: string; }
 
@@ -112,6 +123,7 @@ export default function Dashboard() {
     return localStorage.getItem('cwcl_community_banner_dismissed') === 'true';
   });
   const [announcementWhatsapp, setAnnouncementWhatsapp] = useState('');
+  const [foundingSlots, setFoundingSlots] = useState<FoundingSlotState>({ enabled: false, claimed: 0, max: 20, seasonLabel: '2026–27' });
 
   useEffect(() => {
     const unsubs: (() => void)[] = [];
@@ -142,6 +154,7 @@ export default function Dashboard() {
         const allRows = s.docs
           .map(d => ({ uid: d.id, ...d.data() } as LeaderRow))
           .filter(r => (r as any).role !== 'admin' && (r as any).role !== 'super_admin');
+        allRows.forEach(r => { r.foundingMember = !!(r as any).foundingMember; });
 
         // Top 10 for display
         const rows = allRows.slice(0, 10);
@@ -169,6 +182,30 @@ export default function Dashboard() {
         if (link) setAnnouncementWhatsapp(link);
       }
     }).catch(() => {});
+
+    // Live founding member slot counter
+    unsubs.push(onSnapshot(
+      query(collection(db, 'participants'), where('foundingMember', '==', true)),
+      s => {
+        setFoundingSlots(prev => ({ ...prev, claimed: s.size }));
+      }
+    ));
+
+    // Founding member settings
+    unsubs.push(onSnapshot(
+      doc(db, 'settings', 'foundingMembers'),
+      s => {
+        if (s.exists()) {
+          const data = s.data();
+          setFoundingSlots(prev => ({
+            ...prev,
+            enabled: data.enabled === true,
+            max: Number(data.maxFoundingMembers) || prev.max,
+            seasonLabel: data.seasonLabel || prev.seasonLabel,
+          }));
+        }
+      }
+    ));
 
     // Recent results — index on (participantId, contestId) is now enabled
     if (participant) {
@@ -240,6 +277,47 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ── Founding Member Welcome Card ── */}
+      {participant.foundingMember && (
+        <div className="card border-gold/30 founding-glow">
+          <div className="flex flex-col sm:flex-row items-center gap-5">
+            <div className="w-16 h-16 rounded-full bg-gold/10 border border-gold/30 flex items-center justify-center shrink-0">
+              <Crown size={28} className="text-gold" />
+            </div>
+            <div className="flex-1 text-center sm:text-left">
+              <h2 className="heading-sm !text-gold text-sm mb-1">Congratulations, Founding Member!</h2>
+              <p className="text-text-secondary text-xs leading-relaxed">
+                You are #{participant.foundingRank} of {foundingSlots.max} inaugural members for CWCL {foundingSlots.seasonLabel}.
+                Your exclusive badge and founding certificate are ready below.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 shrink-0 w-full sm:w-auto">
+              <Link to="/dashboard/profile"
+                className="btn-primary text-xs px-4 py-2 flex items-center justify-center gap-1.5 bg-gold/10 border-gold/30 text-gold hover:bg-gold/20">
+                <Star size={12} /> View Badge
+              </Link>
+              <button
+                onClick={() => {
+                  toast.loading('Generating certificate…', { id: 'fm-cert' });
+                  downloadFoundingCertificate({
+                    certificateId: `CWCL-FM-${participant.participantId}`,
+                    participantName: participant.fullName,
+                    season: participant.foundingSeasonId || foundingSlots.seasonLabel,
+                    issuedDate: participant.foundingAwardedAt
+                      ? new Date(participant.foundingAwardedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+                      : new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }),
+                  }).then(() => toast.success('Certificate downloaded!', { id: 'fm-cert' }))
+                    .catch(() => toast.error('Download failed', { id: 'fm-cert' }));
+                }}
+                className="btn-primary text-xs px-4 py-2 flex items-center justify-center gap-1.5"
+              >
+                <Download size={12} /> Certificate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Community Banner ── */}
       {!communityBannerDismissed && announcementWhatsapp && (
         <div className="relative bg-card-dark border border-neon-cyan/25 rounded-xl p-4 md:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -282,6 +360,13 @@ export default function Dashboard() {
         <StatCard icon={Trophy}     label="Contests"   value={participant.contestsParticipated}            color="text-electric-blue"  />
         <StatCard icon={Award}      label="Badges"     value={participant.badges?.length ?? 0}             color="text-gold"           />
         <StatCard icon={Crown}      label="My Rank"    value={myRank ? `#${myRank}` : '—'}                color="text-success"        />
+        <StatCard
+          icon={Sparkles}
+          label="Founding Slots"
+          value={`${foundingSlots.claimed} / ${foundingSlots.max}`}
+          color={foundingSlots.claimed >= foundingSlots.max ? 'text-text-secondary' : 'text-gold'}
+          infoText="Limited founding member slots for the inaugural season. First come, first served."
+        />
       </div>
 
       {/* ── Upcoming Contest + Competitive Profiles ── */}
@@ -407,6 +492,11 @@ export default function Dashboard() {
                     <div className="flex-1 min-w-0">
                       <div className={`text-xs font-medium truncate ${isMe ? 'text-neon-cyan' : 'text-white'}`}>
                         {r.fullName} {isMe && <span className="text-[10px] text-neon-cyan/70">(you)</span>}
+                        {r.foundingMember && (
+                          <span title="Founding Member" className="inline-block ml-1 align-middle">
+                            <Crown size={10} className="text-gold" />
+                          </span>
+                        )}
                       </div>
                       <div className="text-text-secondary/60 text-[10px] truncate">{r.college}</div>
                     </div>

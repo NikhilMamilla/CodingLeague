@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
-import { Award, Download, CheckCircle2, Clock, Share2, ShieldCheck } from 'lucide-react';
+import { Award, Download, CheckCircle2, Clock, Share2, ShieldCheck, Crown } from 'lucide-react';
 import type { Certificate } from '../../types';
 import toast from 'react-hot-toast';
-import { downloadCertificate } from '../../lib/certificateGenerator';
+import { downloadCertificate, downloadFoundingCertificate } from '../../lib/certificateGenerator';
+import FoundingMemberBadge from '../../components/ui/FoundingMemberBadge';
 
 const TYPE_EMOJI: Record<string, string> = {
   Winner: '🏆',
@@ -111,6 +112,48 @@ export default function MyCertificates() {
         </div>
       ) : (
         <>
+          {/* Founding Member Downloads */}
+          {participant.foundingMember && (
+            <div className="card border-gold/30 space-y-4">
+              <div className="flex items-center gap-2 pb-3 border-b border-gold/10">
+                <Crown size={14} className="text-gold" />
+                <h2 className="font-heading text-sm font-bold text-gold">Founding Member Downloads</h2>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="flex flex-col items-center text-center gap-3">
+                  <FoundingMemberBadge size={140} />
+                  <FoundingMemberBadge size={160} downloadable />
+                </div>
+                <div className="flex flex-col items-center justify-center text-center gap-3 p-4 rounded-xl bg-gold/5 border border-gold/10">
+                  <div className="text-3xl">📜</div>
+                  <div>
+                    <h3 className="font-heading text-white text-xs font-bold uppercase tracking-wide">Founding Certificate</h3>
+                    <p className="text-text-secondary/60 text-[10px] mt-1">
+                      Official certificate recognizing your inaugural membership.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      toast.loading('Generating certificate…', { id: 'fm-cert' });
+                      downloadFoundingCertificate({
+                        certificateId: `CWCL-FM-${participant.participantId}`,
+                        participantName: participant.fullName,
+                        season: participant.foundingSeasonId || '2026–27',
+                        issuedDate: participant.foundingAwardedAt
+                          ? new Date(participant.foundingAwardedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+                          : new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }),
+                      }).then(() => toast.success('Certificate downloaded!', { id: 'fm-cert' }))
+                        .catch(() => toast.error('Download failed', { id: 'fm-cert' }));
+                    }}
+                    className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5 bg-gold/10 border-gold/30 text-gold hover:bg-gold/20"
+                  >
+                    <Download size={13} /> Download Certificate
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div className="card p-4 space-y-1">

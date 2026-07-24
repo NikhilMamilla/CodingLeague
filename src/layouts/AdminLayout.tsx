@@ -3,7 +3,7 @@ import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Calendar, Upload, Users,
   Megaphone, LogOut, Menu, X, Home, ChevronRight,
-  Shield, Database, Handshake, Award, Settings,
+  Shield, Database, Handshake, Award, Settings, Crown,
 } from 'lucide-react';
 import CBBLogo from '../components/ui/CBBLogo';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,7 +18,9 @@ const LINKS = [
   { to: '/admin/sponsors',      label: 'Sponsors',      icon: Handshake,       end: false },
   { to: '/admin/announcements', label: 'Announcements', icon: Megaphone,       end: false },
   { to: '/admin/community',     label: 'Community',     icon: Settings,        end: false },
-  { to: '/admin/seed',          label: 'Seed Schedule', icon: Database,        end: false },
+  { to: '/admin/founding-members',     label: 'Founding Members',     icon: Crown,     end: false },
+  { to: '/admin/founding-members-list', label: 'Founding Members List', icon: Users,     end: false },
+  { to: '/admin/seed',                 label: 'Seed Schedule',        icon: Database,  end: false },
 ];
 
 export default function AdminLayout() {

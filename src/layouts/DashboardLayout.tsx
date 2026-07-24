@@ -5,6 +5,7 @@ import {
   Menu, X, Home, ChevronRight, TrendingUp, Trophy, Megaphone, BookOpen, Compass, Users,
 } from 'lucide-react';
 import CBBLogo from '../components/ui/CBBLogo';
+import LoginNotifications from '../components/LoginNotifications';
 import { useAuth } from '../contexts/AuthContext';
 
 const LINKS = [
@@ -198,6 +199,9 @@ export default function DashboardLayout() {
           </div>
         </main>
       </div>
+
+      {/* Login-time notifications for new badges / certificates */}
+      <LoginNotifications />
     </div>
   );
 }

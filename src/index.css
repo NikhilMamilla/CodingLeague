@@ -156,6 +156,20 @@
   .rank-gold   { @apply text-gold; }
   .rank-silver { @apply text-silver; }
   .rank-bronze { @apply text-bronze; }
+
+  /* ---- Founding Member Gold Utilities ---- */
+  .founding-border {
+    @apply border-2 border-gold;
+    box-shadow: 0 0 18px rgba(244, 196, 48, 0.35), inset 0 0 10px rgba(244, 196, 48, 0.08);
+  }
+
+  .founding-glow {
+    box-shadow: 0 0 20px rgba(244, 196, 48, 0.35), 0 0 40px rgba(244, 196, 48, 0.12);
+  }
+
+  .founding-avatar {
+    @apply founding-border rounded-full;
+  }
 }
 
 /* ---- Hide Scrollbar (keep scroll functionality) ---- */

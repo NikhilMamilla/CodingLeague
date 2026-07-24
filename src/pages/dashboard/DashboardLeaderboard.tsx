@@ -28,6 +28,7 @@ interface LeaderRow {
   contests: number;
   attendance: number;
   badges: number;
+  foundingMember?: boolean;
 }
 
 function RankBadge({ rank }: { rank: number }) {
@@ -68,6 +69,7 @@ export default function DashboardLeaderboard() {
           contests:   p.contestsParticipated,
           attendance: p.attendance ?? 0,
           badges:     p.badges?.length ?? 0,
+          foundingMember: p.foundingMember,
         }));
       setRows(data);
       setLoading(false);
@@ -126,7 +128,12 @@ export default function DashboardLeaderboard() {
               }
             </div>
             <div>
-              <div className="text-white font-semibold text-sm">{participant.fullName}</div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-white font-semibold text-sm">{participant.fullName}</span>
+                {participant.foundingMember && (
+                  <span title="Founding Member" className="text-gold"><Crown size={12} /></span>
+                )}
+              </div>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className={TIER_CLASS[participant.tier]}>{participant.tier}</span>
                 <span className="text-text-secondary text-[10px]">{participant.participantId}</span>
@@ -255,8 +262,11 @@ function FullTable({ rows, myUid }: { rows: LeaderRow[]; myUid?: string }) {
                       </span>
                     </div>
                     <div>
-                      <div className={`font-medium ${isMe ? 'text-neon-cyan' : 'text-white'}`}>
+                      <div className={`flex items-center gap-1.5 ${isMe ? 'text-neon-cyan' : 'text-white'} font-medium`}>
                         {r.name} {isMe && <span className="text-[10px] text-neon-cyan/70">(you)</span>}
+                        {r.foundingMember && (
+                          <span title="Founding Member" className="text-gold"><Crown size={11} /></span>
+                        )}
                       </div>
                       <div className="text-text-secondary/60 text-[10px] font-numbers">{r.id}</div>
                     </div>
@@ -300,8 +310,11 @@ function TierTable({ rows, myUid }: { rows: LeaderRow[]; myUid?: string }) {
               <tr key={r.uid} className={`transition-colors ${isMe ? 'bg-neon-cyan/5' : 'hover:bg-white/5'}`}>
                 <td className="py-2.5 px-3"><RankBadge rank={i + 1} /></td>
                 <td className="py-2.5 px-3">
-                  <div className={`font-medium ${isMe ? 'text-neon-cyan' : 'text-white'}`}>
+                  <div className={`flex items-center gap-1.5 ${isMe ? 'text-neon-cyan' : 'text-white'} font-medium`}>
                     {r.name} {isMe && <span className="text-[10px] text-neon-cyan/70">(you)</span>}
+                    {r.foundingMember && (
+                      <span title="Founding Member" className="text-gold"><Crown size={11} /></span>
+                    )}
                   </div>
                   <div className="text-text-secondary/60 text-[10px]">{r.id}</div>
                 </td>
