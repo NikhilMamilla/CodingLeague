@@ -41,6 +41,7 @@ function RankBadge({ rank }: { rank: number }) {
 export default function DashboardLeaderboard() {
   const { participant } = useAuth();
   const [rows,    setRows]    = useState<LeaderRow[]>([]);
+  const [contestCounts, setContestCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [tab,     setTab]     = useState<Tab>('overall');
   const [search,  setSearch]  = useState('');
@@ -55,7 +56,7 @@ export default function DashboardLeaderboard() {
     const unsub = onSnapshot(q, snap => {
       const data: LeaderRow[] = snap.docs
         .map(d => ({ uid: d.id, ...d.data() } as Participant))
-        .filter(p => (p as any).role !== 'admin')
+        .filter(p => p.role !== 'admin' && p.role !== 'super_admin')
         .map((p, i) => ({
           rank:       i + 1,
           uid:        p.uid,
@@ -77,15 +78,44 @@ export default function DashboardLeaderboard() {
     return () => unsub();
   }, []);
 
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'contestResults'), snap => {
+      const contestsByParticipant: Record<string, Set<string>> = {};
+
+      snap.docs.forEach(d => {
+        const data = d.data();
+        if (!data.participantId || !data.contestId) return;
+        const participantId = String(data.participantId);
+        contestsByParticipant[participantId] ??= new Set<string>();
+        contestsByParticipant[participantId].add(String(data.contestId));
+      });
+
+      setContestCounts(
+        Object.fromEntries(
+          Object.entries(contestsByParticipant).map(([participantId, contests]) => [participantId, contests.size])
+        )
+      );
+    });
+
+    return () => unsub();
+  }, []);
+
+  const rowsWithActualContests = rows.map(r => ({
+    ...r,
+    contests: contestCounts[r.id] ?? 0,
+  }));
+
+  const myContestCount = participant ? contestCounts[participant.participantId] ?? 0 : 0;
+
   // My rank
-  const myRank = rows.findIndex(r => r.uid === participant?.uid);
+  const myRank = rowsWithActualContests.findIndex(r => r.uid === participant?.uid);
 
   // Filtered rows based on tab + search
   const base = tab === 'overall'
-    ? rows
+    ? rowsWithActualContests
     : tab === 'college'
-    ? rows.filter(r => r.college === participant?.college)
-    : rows; // tier handled below
+    ? rowsWithActualContests.filter(r => r.college === participant?.college)
+    : rowsWithActualContests; // tier handled below
 
   const searched = base.filter(r =>
     search === '' ||
@@ -96,7 +126,7 @@ export default function DashboardLeaderboard() {
 
   // Group by tier for tier tab
   const byTier = TIER_ORDER.reduce<Record<string, LeaderRow[]>>((acc, t) => {
-    acc[t] = rows.filter(r => r.tier === t);
+    acc[t] = rowsWithActualContests.filter(r => r.tier === t);
     return acc;
   }, {});
 
@@ -150,7 +180,7 @@ export default function DashboardLeaderboard() {
               <div className="text-text-secondary text-[10px] uppercase tracking-wider">Rating</div>
             </div>
             <div className="text-center">
-              <div className="stat-number text-2xl text-success">{participant.contestsParticipated}</div>
+              <div className="stat-number text-2xl text-success">{myContestCount}</div>
               <div className="text-text-secondary text-[10px] uppercase tracking-wider">Contests</div>
             </div>
           </div>

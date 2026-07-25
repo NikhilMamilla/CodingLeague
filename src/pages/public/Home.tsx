@@ -1,10 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { Link } from 'react-router-dom';
-import { Zap, Trophy, ChevronRight, Calendar, Users, Star, Award, TrendingUp, Shield, Crown } from 'lucide-react';
-import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
+import { Zap, Trophy, ChevronRight, Calendar, Users, Star, Award, TrendingUp, Shield } from 'lucide-react';
 import CBBLogo from '../../components/ui/CBBLogo';
 import { SOCIALS } from '../../components/ui/SocialIcons';
-import { db } from '../../lib/firebase';
 
 function FeatureCard({ icon: Icon, title, desc }: { icon: React.ElementType; title: string; desc: string }) {
   return (
@@ -31,32 +29,6 @@ function StepCard({ step, title, desc }: { step: string; title: string; desc: st
 }
 
 export default function Home() {
-  const [foundingSlots, setFoundingSlots] = useState({ enabled: false, claimed: 0, max: 20, seasonLabel: '2026–27' });
-
-  useEffect(() => {
-    const unsubCount = onSnapshot(
-      query(collection(db, 'participants'), where('foundingMember', '==', true)),
-      s => setFoundingSlots(prev => ({ ...prev, claimed: s.size }))
-    );
-    const unsubSettings = onSnapshot(
-      doc(db, 'settings', 'foundingMembers'),
-      s => {
-        if (s.exists()) {
-          const data = s.data();
-          setFoundingSlots(prev => ({
-            ...prev,
-            enabled: data.enabled === true,
-            max: Number(data.maxFoundingMembers) || prev.max,
-            seasonLabel: data.seasonLabel || prev.seasonLabel,
-          }));
-        }
-      }
-    );
-    return () => { unsubCount(); unsubSettings(); };
-  }, []);
-
-  const remaining = Math.max(0, foundingSlots.max - foundingSlots.claimed);
-
   return (
     <div className="bg-midnight">
 
@@ -112,21 +84,6 @@ export default function Home() {
                 <Link to="/leaderboard" className="btn-secondary text-[10px] sm:text-sm px-4 sm:px-8 py-2">Leaderboard</Link>
               </div>
 
-              {/* Founding Member slot counter */}
-              {foundingSlots.enabled && (
-                <Link
-                  to="/founding-members"
-                  className="inline-flex items-center gap-2 bg-gold/5 border border-gold/30 hover:border-gold/50 rounded-full px-3 py-1.5 transition-colors"
-                >
-                  <Crown size={12} className="text-gold" />
-                  <span className="text-gold text-[10px] font-heading font-bold uppercase tracking-wider">
-                    {foundingSlots.claimed} / {foundingSlots.max} Founding Slots Claimed
-                  </span>
-                  <span className="text-text-secondary/70 text-[10px]">
-                    {remaining === 0 ? 'All claimed!' : `Only ${remaining} left`}
-                  </span>
-                </Link>
-              )}
 
               {/* Social icons */}
               <div className="flex items-center gap-3 justify-center lg:justify-start mt-1">

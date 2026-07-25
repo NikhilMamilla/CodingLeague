@@ -1,21 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Search, Crown } from 'lucide-react';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { Search, Crown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { Participant } from '../../types';
 import { TIER_CONFIG } from '../../lib/ratingEngine';
 
+const PAGE_SIZE = 30;
+
 export default function Leaderboard() {
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [contestCounts, setContestCounts] = useState<Record<string, number>>({});
   const [loading, setLoading]           = useState(true);
   const [search, setSearch]             = useState('');
+  const [page, setPage]                 = useState(1);
 
   useEffect(() => {
     // Real-time — ordered by rating, filter admins client-side
     const q = query(
       collection(db, 'participants'),
-      orderBy('rating', 'desc'),
-      limit(200)
+      orderBy('rating', 'desc')
     );
     const unsub = onSnapshot(q, snap => {
       setParticipants(
@@ -28,11 +31,42 @@ export default function Leaderboard() {
     return () => unsub();
   }, []);
 
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'contestResults'), snap => {
+      const contestsByParticipant: Record<string, Set<string>> = {};
+
+      snap.docs.forEach(d => {
+        const data = d.data();
+        if (!data.participantId || !data.contestId) return;
+        const participantId = String(data.participantId);
+        contestsByParticipant[participantId] ??= new Set<string>();
+        contestsByParticipant[participantId].add(String(data.contestId));
+      });
+
+      setContestCounts(
+        Object.fromEntries(
+          Object.entries(contestsByParticipant).map(([participantId, contests]) => [participantId, contests.size])
+        )
+      );
+    });
+
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
+
   const filtered = participants.filter(p =>
     !search ||
     p.fullName.toLowerCase().includes(search.toLowerCase()) ||
     p.college.toLowerCase().includes(search.toLowerCase())
   );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const visibleParticipants = filtered.slice(startIndex, startIndex + PAGE_SIZE);
 
   return (
     <div className="min-h-screen bg-midnight pt-24 pb-16 px-4 md:px-8">
@@ -77,13 +111,16 @@ export default function Leaderboard() {
                     {participants.length === 0 ? 'No results published yet. Check back after the first contest!' : 'No results match your search.'}
                   </td></tr>
                 ) : (
-                  filtered.map((p, i) => (
+                  visibleParticipants.map((p, i) => {
+                    const rank = startIndex + i + 1;
+
+                    return (
                     <tr key={p.uid} className="hover:bg-neon-cyan/5 transition-colors">
                       <td className="px-4 py-3">
                         <span className={`font-numbers font-bold text-sm ${
-                          i === 0 ? 'text-gold' : i === 1 ? 'text-silver' : i === 2 ? 'text-bronze' : 'text-text-secondary'
+                          rank === 1 ? 'text-gold' : rank === 2 ? 'text-silver' : rank === 3 ? 'text-bronze' : 'text-text-secondary'
                         }`}>
-                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
+                          {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-white font-medium">
@@ -95,6 +132,7 @@ export default function Leaderboard() {
                         </div>
                       </td>
                       <td className="px-4 py-3 text-text-secondary">{p.college}</td>
+                      <td className="px-4 py-3 text-center font-numbers font-bold text-neon-cyan">{p.rating}</td>
                       <td className="px-4 py-3 text-center">
                         {(() => {
                           const cfg = TIER_CONFIG[p.tier] ?? TIER_CONFIG.Beginner;
@@ -105,16 +143,46 @@ export default function Leaderboard() {
                           );
                         })()}
                       </td>
-                      <td className="px-4 py-3 text-center font-numbers text-text-secondary">{p.contestsParticipated}</td>
+                      <td className="px-4 py-3 text-center font-numbers text-text-secondary">{contestCounts[p.participantId] ?? 0}</td>
                       <td className="px-4 py-3 text-center font-numbers text-text-secondary">{p.badges?.length ?? 0}</td>
                       <td className="px-4 py-3 text-center font-numbers text-text-secondary">{(p.attendance ?? 0).toFixed(1)}%</td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
         </div>
+
+        {!loading && filtered.length > PAGE_SIZE && (
+          <div className="mt-5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-text-secondary">
+            <span>
+              Showing {startIndex + 1}–{Math.min(startIndex + PAGE_SIZE, filtered.length)} of {filtered.length} participants
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="btn-secondary px-3 py-2 text-[10px] disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1"
+              >
+                <ChevronLeft size={12} /> Prev
+              </button>
+              <span className="px-3 py-2 rounded-lg bg-white/5 border border-neon-cyan/10 font-numbers">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="btn-primary px-3 py-2 text-[10px] flex items-center gap-1 disabled:opacity-40 disabled:pointer-events-none"
+              >
+                Next <ChevronRight size={12} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
