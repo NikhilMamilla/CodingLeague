@@ -83,11 +83,17 @@ export default function AdminDashboard() {
         <div className="hidden sm:flex gap-3 flex-wrap">
           <button
             onClick={async () => {
+              const already = localStorage.getItem('cwcl_migration_done');
+              if (already) {
+                toast.error('Migration already completed. Remove this button to prevent accidental re-runs.');
+                return;
+              }
               if (!confirm('This will copy ALL data from Firestore to Supabase. Run only ONCE. Continue?')) return;
               setMigrating(true);
               toast.loading('Migrating data…', { id: 'migration' });
               try {
                 await runMigration();
+                localStorage.setItem('cwcl_migration_done', 'true');
                 toast.success('Migration complete! Refresh the page.', { id: 'migration', duration: 8000 });
               } catch (e: any) {
                 toast.error('Migration failed: ' + e.message, { id: 'migration' });
