@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Search, Crown, ChevronLeft, ChevronRight } from 'lucide-react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import type { Participant } from '../../types';
 import { TIER_CONFIG } from '../../lib/ratingEngine';
+import { getParticipants, getAllResults } from '../../lib/db';
 
 const PAGE_SIZE = 30;
 
@@ -15,42 +14,19 @@ export default function Leaderboard() {
   const [page, setPage]                 = useState(1);
 
   useEffect(() => {
-    // Real-time — ordered by rating, filter admins client-side
-    const q = query(
-      collection(db, 'participants'),
-      orderBy('rating', 'desc')
-    );
-    const unsub = onSnapshot(q, snap => {
-      setParticipants(
-        snap.docs
-          .map(d => ({ uid: d.id, ...d.data() } as Participant))
-          .filter(p => p.role !== 'admin' && p.role !== 'super_admin')
-      );
+    getParticipants(500).then(list => {
+      setParticipants(list.filter(p => p.role !== 'admin' && p.role !== 'super_admin'));
       setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'contestResults'), snap => {
-      const contestsByParticipant: Record<string, Set<string>> = {};
-
-      snap.docs.forEach(d => {
-        const data = d.data();
-        if (!data.participantId || !data.contestId) return;
-        const participantId = String(data.participantId);
-        contestsByParticipant[participantId] ??= new Set<string>();
-        contestsByParticipant[participantId].add(String(data.contestId));
+    }).catch(() => setLoading(false));
+    getAllResults().then(results => {
+      const map: Record<string, Set<string>> = {};
+      results.forEach(r => {
+        if (!r.participantId || !r.contestId) return;
+        map[r.participantId] ??= new Set();
+        map[r.participantId].add(r.contestId);
       });
-
-      setContestCounts(
-        Object.fromEntries(
-          Object.entries(contestsByParticipant).map(([participantId, contests]) => [participantId, contests.size])
-        )
-      );
-    });
-
-    return () => unsub();
+      setContestCounts(Object.fromEntries(Object.entries(map).map(([id, s]) => [id, s.size])));
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {

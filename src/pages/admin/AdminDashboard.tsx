@@ -2,14 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Users, Calendar, Trophy, Megaphone, Upload,
-  Clock, AlertCircle, ChevronRight, Shield, Award, Crown,
+  Clock, AlertCircle, ChevronRight, Shield, Award, Crown, Database,
 } from 'lucide-react';
-import {
-  collection, query, orderBy, onSnapshot, limit,
-} from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import type { Contest, Announcement, Participant } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
+import { getParticipants, getContests, getAnnouncements, getAllResults, getCertificates } from '../../lib/db';
+import { runMigration } from '../../lib/migrate';
+import toast from 'react-hot-toast';
 
 interface Counts { participants: number; contests: number; results: number; announcements: number; badges: number; certificates: number; foundingMembers: number; }
 
@@ -43,38 +42,30 @@ export default function AdminDashboard() {
   const [contests,      setContests]      = useState<Contest[]>([]);
   const [recent,        setRecent]        = useState<Participant[]>([]);
   const [announcements, setAnnouncements] = useState<(Announcement & { id: string })[]>([]);
+  const [migrating,     setMigrating]     = useState(false);
 
   useEffect(() => {
-    const unsubs = [
-      // Live counts
-      onSnapshot(collection(db, 'participants'),   s => {
-        const parts = s.docs.filter(d => d.data().role !== 'admin');
-        const totalBadges = parts.reduce((sum, d) => sum + ((d.data().badges?.length) || 0), 0);
-        const founding = parts.filter(d => d.data().foundingMember === true).length;
-        setCounts(c => ({ ...c, participants: parts.length, badges: totalBadges, foundingMembers: founding }));
-      }),
-      onSnapshot(collection(db, 'contests'),       s => setCounts(c => ({ ...c, contests: s.size }))),
-      onSnapshot(collection(db, 'contestResults'), s => setCounts(c => ({ ...c, results: s.size }))),
-      onSnapshot(collection(db, 'announcements'),  s => setCounts(c => ({ ...c, announcements: s.size }))),
-      onSnapshot(collection(db, 'certificates'),   s => setCounts(c => ({ ...c, certificates: s.size }))),
-      // Live lists
-      onSnapshot(
-        query(collection(db, 'contests'), orderBy('date', 'asc'), limit(5)),
-        s => setContests(s.docs.map(d => ({ id: d.id, ...d.data() } as Contest)))
-      ),
-      onSnapshot(
-        query(collection(db, 'participants'), orderBy('createdAt', 'desc'), limit(5)),
-        s => setRecent(
-          s.docs.map(d => ({ uid: d.id, ...d.data() } as Participant))
-               .filter(p => (p as any).role !== 'admin')
-        )
-      ),
-      onSnapshot(
-        query(collection(db, 'announcements'), orderBy('createdAt', 'desc'), limit(3)),
-        s => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() } as Announcement & { id: string })))
-      ),
-    ];
-    return () => unsubs.forEach(u => u());
+    Promise.all([
+      getParticipants(500),
+      getContests(),
+      getAllResults(),
+      getAnnouncements(3),
+      getCertificates(),
+    ]).then(([parts, contests, results, announcements, certs]) => {
+      const nonAdmin = parts.filter(p => p.role !== 'admin');
+      setCounts({
+        participants: nonAdmin.length,
+        contests: contests.length,
+        results: results.length,
+        announcements: announcements.length,
+        badges: nonAdmin.reduce((s, p) => s + (p.badges?.length ?? 0), 0),
+        certificates: certs.length,
+        foundingMembers: nonAdmin.filter(p => p.foundingMember).length,
+      });
+      setContests(contests.slice(0, 5));
+      setRecent(nonAdmin.slice(0, 5));
+      setAnnouncements(announcements);
+    }).catch(() => {});
   }, []);
 
   return (
@@ -90,6 +81,24 @@ export default function AdminDashboard() {
           </p>
         </div>
         <div className="hidden sm:flex gap-3 flex-wrap">
+          <button
+            onClick={async () => {
+              if (!confirm('This will copy ALL data from Firestore to Supabase. Run only ONCE. Continue?')) return;
+              setMigrating(true);
+              toast.loading('Migrating data…', { id: 'migration' });
+              try {
+                await runMigration();
+                toast.success('Migration complete! Refresh the page.', { id: 'migration', duration: 8000 });
+              } catch (e: any) {
+                toast.error('Migration failed: ' + e.message, { id: 'migration' });
+              }
+              setMigrating(false);
+            }}
+            disabled={migrating}
+            className="btn-secondary text-xs px-4 py-2 flex items-center gap-2 border-warning/40 text-warning hover:bg-warning/10 disabled:opacity-50"
+          >
+            <Database size={12} /> {migrating ? 'Migrating…' : 'Migrate Firestore → Supabase'}
+          </button>
           <Link to="/admin/certificates" className="btn-primary text-xs px-4 py-2 flex items-center gap-2">
             <Award size={12} /> Manage Certificates
           </Link>

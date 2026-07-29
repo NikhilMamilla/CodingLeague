@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import type { Participant } from '../../types';
 import { BADGE_META } from '../../types';
 import {
@@ -8,6 +6,7 @@ import {
   X, Shield, ExternalLink, Link2,
 } from 'lucide-react';
 import { getCanonicalProfileUrl } from '../../lib/profileVerification';
+import { getParticipants } from '../../lib/db';
 
 const TIER_CLASS: Record<string, string> = {
   Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
@@ -29,16 +28,10 @@ export default function ManageUsers() {
   const [viewing, setViewing] = useState<Participant | null>(null);
 
   useEffect(() => {
-    const q = query(collection(db, 'participants'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, snap => {
-      setParticipants(
-        snap.docs
-          .map(d => ({ uid: d.id, ...d.data() } as Participant))
-          .filter(p => (p as any).role !== 'admin')
-      );
+    getParticipants(500).then(data => {
+      setParticipants(data.filter(p => p.role !== 'admin'));
       setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
+    }).catch(() => setLoading(false));
   }, []);
 
   const filtered = participants.filter(p =>

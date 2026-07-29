@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { getSetting, setSetting } from '../../lib/db';
 import { Settings, Save, Loader2, CheckCircle2, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -39,25 +38,23 @@ export default function CommunitySettings() {
   useEffect(() => {
     (async () => {
       try {
-        const [commSnap, socialSnap] = await Promise.all([
-          getDoc(doc(db, 'settings', 'community')),
-          getDoc(doc(db, 'settings', 'social')),
+        const [commData, socialData] = await Promise.all([
+          getSetting('community'),
+          getSetting('social'),
         ]);
-        if (commSnap.exists()) {
-          const d = commSnap.data();
+        if (commData) {
           setCommunity({
-            announcementWhatsapp: d.announcementWhatsapp ?? '',
-            discussionWhatsapp: d.discussionWhatsapp ?? '',
-            discord: d.discord ?? '',
+            announcementWhatsapp: commData.announcementWhatsapp ?? '',
+            discussionWhatsapp: commData.discussionWhatsapp ?? '',
+            discord: commData.discord ?? '',
           });
         }
-        if (socialSnap.exists()) {
-          const d = socialSnap.data();
+        if (socialData) {
           setSocial({
-            instagram: d.instagram ?? '',
-            linkedin: d.linkedin ?? '',
-            twitter: d.twitter ?? '',
-            website: d.website ?? '',
+            instagram: socialData.instagram ?? '',
+            linkedin: socialData.linkedin ?? '',
+            twitter: socialData.twitter ?? '',
+            website: socialData.website ?? '',
           });
         }
       } catch (e: any) {
@@ -71,8 +68,8 @@ export default function CommunitySettings() {
     setSaving(true);
     try {
       await Promise.all([
-        setDoc(doc(db, 'settings', 'community'), community),
-        setDoc(doc(db, 'settings', 'social'), social),
+        setSetting('community', community),
+        setSetting('social', social),
       ]);
       toast.success('Community settings saved!');
     } catch (e: any) {

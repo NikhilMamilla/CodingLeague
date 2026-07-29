@@ -4,10 +4,8 @@ import {
   Calendar, Filter, Bell, ExternalLink, Trophy, Zap
 } from 'lucide-react';
 import CBBLogo from '../../components/ui/CBBLogo';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import type { Contest as FirestoreContest } from '../../types';
-import { cachedFetch } from '../../lib/cache';
+import { getContests } from '../../lib/db';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type FilterType = 'All' | 'Online' | 'Offline' | 'Bonus' | 'Upcoming' | 'Completed';
@@ -332,13 +330,8 @@ export default function Schedule() {
   const [loading,  setLoading]  = useState(true);
   const [filter,   setFilter]   = useState<FilterType>('All');
 
-  // Cached fetch — contest schedule rarely changes mid-session
   useEffect(() => {
-    cachedFetch('contests:all', async () => {
-      const q = query(collection(db, 'contests'), orderBy('date', 'asc'));
-      const snap = await getDocs(q);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() } as FirestoreContest));
-    }).then(data => {
+    getContests().then(data => {
       setContests(data);
       setLoading(false);
     }).catch(() => setLoading(false));

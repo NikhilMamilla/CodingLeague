@@ -1,6 +1,4 @@
 import { useEffect, useState } from 'react';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import type { ContestResult } from '../../types';
 import {
@@ -9,6 +7,7 @@ import {
   PolarGrid, PolarAngleAxis, Radar,
 } from 'recharts';
 import { TrendingUp, Trophy, Target, Zap, BarChart2, ListOrdered } from 'lucide-react';
+import { getResultsByParticipant } from '../../lib/db';
 
 const TIP = {
   contentStyle: { background: '#0B1120', border: '1px solid rgba(0,229,255,0.2)', borderRadius: 8, fontSize: 11 },
@@ -38,23 +37,10 @@ export default function MyStats() {
 
   useEffect(() => {
     if (!participant) return;
-
-    // Real-time listener — new results appear immediately after admin import
-    const q = query(
-      collection(db, 'contestResults'),
-      where('participantId', '==', participant.participantId),
-      orderBy('contestId', 'asc')
-    );
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setResults(snap.docs.map(d => d.data() as ContestResult));
-        setLoading(false);
-      },
-      () => { setLoading(false); }
-    );
-    return () => unsub();
-  }, [participant]);
+    getResultsByParticipant(participant.participantId)
+      .then(list => { setResults(list); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [participant?.participantId]);
 
   if (!participant) return null;
 

@@ -4,14 +4,11 @@ import {
   Crown, Users, Download, Search, Calendar,
   FileSpreadsheet, Award, Loader2, UserPlus,
 } from 'lucide-react';
-import {
-  collection, query, orderBy, onSnapshot, getDocs,
-} from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import type { Participant } from '../../types';
 import { downloadFoundingCertificate } from '../../lib/certificateGenerator';
 import { downloadFoundingBadge } from '../../components/ui/FoundingMemberBadge';
 import { assignFoundingMember } from '../../lib/foundingMembers';
+import { getParticipants, getSetting } from '../../lib/db';
 import toast from 'react-hot-toast';
 
 export default function FoundingMembersAdmin() {
@@ -25,24 +22,14 @@ export default function FoundingMembersAdmin() {
   const [maxSlots, setMaxSlots] = useState(20);
 
   useEffect(() => {
-    const q = query(collection(db, 'participants'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, snap => {
-      setAllParticipants(snap.docs
-        .map(d => ({ uid: d.id, ...d.data() } as Participant))
-        .filter(p => p.role !== 'admin' && p.role !== 'super_admin')
-      );
+    Promise.all([
+      getParticipants(2000),
+      getSetting('foundingMembers'),
+    ]).then(([parts, settings]) => {
+      setAllParticipants(parts.filter(p => p.role !== 'admin' && p.role !== 'super_admin'));
+      if (settings?.maxFoundingMembers) setMaxSlots(Number(settings.maxFoundingMembers) || 20);
       setLoading(false);
-    }, () => setLoading(false));
-
-    getDocs(collection(db, 'settings')).then(snap => {
-      snap.forEach(d => {
-        if (d.id === 'foundingMembers') {
-          setMaxSlots(Number(d.data().maxFoundingMembers) || 20);
-        }
-      });
-    }).catch(() => {});
-
-    return () => unsub();
+    }).catch(() => setLoading(false));
   }, []);
 
   const members = useMemo(() => {

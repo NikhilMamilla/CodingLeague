@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../../lib/firebase';
+import { storage } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   Camera, Save, ExternalLink, Code2, User,
@@ -11,6 +10,7 @@ import toast from 'react-hot-toast';
 import { BADGE_META } from '../../types';
 import { extractHandle, getCanonicalProfileUrl } from '../../lib/profileVerification';
 import FoundingMemberBadge from '../../components/ui/FoundingMemberBadge';
+import { updateParticipant } from '../../lib/db';
 
 const TIER_CLASS: Record<string, string> = {
   Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
@@ -94,7 +94,7 @@ export default function MyProfile() {
       const storageRef = ref(storage, `avatars/${user!.uid}`);
       await uploadBytes(storageRef, file);
       const url = await getDownloadURL(storageRef);
-      await updateDoc(doc(db, 'participants', user!.uid), { photoURL: url });
+      await updateParticipant(user!.uid, { photo_url: url });
       await refreshParticipant();
       toast.success('Photo updated!');
     } catch { toast.error('Upload failed'); }
@@ -113,20 +113,20 @@ export default function MyProfile() {
       const cfHandle = profiles.codeforcesHandle   ? extractHandle('codeforcesHandle',   profiles.codeforcesHandle)   : null;
       const gfgHandle= profiles.gfgUsername        ? extractHandle('gfgUsername',        profiles.gfgUsername)        : null;
 
-      await updateDoc(doc(db, 'participants', user!.uid), {
+      await updateParticipant(user!.uid, {
         bio,
         github:             github   || null,
         linkedin:           linkedin || null,
-        hackerrankUsername: hrHandle,
-        codechefUsername:   ccHandle,
-        leetcodeUsername:   lcHandle,
-        codeforcesHandle:   cfHandle,
-        gfgUsername:        gfgHandle,
-        hackerrankUrl:      hrHandle ? getCanonicalProfileUrl('hackerrankUsername', hrHandle) : null,
-        codechefUrl:        ccHandle ? getCanonicalProfileUrl('codechefUsername', ccHandle)   : null,
-        leetcodeUrl:        lcHandle ? getCanonicalProfileUrl('leetcodeUsername', lcHandle)   : null,
-        codeforcesUrl:      cfHandle ? getCanonicalProfileUrl('codeforcesHandle', cfHandle)   : null,
-        gfgUrl:             gfgHandle ? getCanonicalProfileUrl('gfgUsername', gfgHandle)     : null,
+        hackerrank_username: hrHandle,
+        codechef_username:   ccHandle,
+        leetcode_username:   lcHandle,
+        codeforces_handle:   cfHandle,
+        gfg_username:        gfgHandle,
+        hackerrank_url:      hrHandle ? getCanonicalProfileUrl('hackerrankUsername', hrHandle) : null,
+        codechef_url:        ccHandle ? getCanonicalProfileUrl('codechefUsername', ccHandle)   : null,
+        leetcode_url:        lcHandle ? getCanonicalProfileUrl('leetcodeUsername', lcHandle)   : null,
+        codeforces_url:      cfHandle ? getCanonicalProfileUrl('codeforcesHandle', cfHandle)   : null,
+        gfg_url:             gfgHandle ? getCanonicalProfileUrl('gfgUsername', gfgHandle)     : null,
       });
       await refreshParticipant();
       toast.success('Profile saved with verified handles!');

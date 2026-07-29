@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Award, FileText, X, Sparkles, Crown } from 'lucide-react';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
-import type { Badge, Certificate } from '../types';
+import type { Badge } from '../types';
 import { BADGE_META } from '../types';
+import { getCertificatesByParticipant } from '../lib/db';
 
 interface NotificationItem {
   id: string;
@@ -94,28 +93,22 @@ export default function LoginNotifications() {
 
       // ── Certificates ──
       try {
-        const certSnap = await getDocs(
-          query(collection(db, 'certificates'), where('email', '==', p.email))
-        );
-        certSnap.docs.forEach((d) => {
-          const cert = d.data() as Certificate;
+        const certs = await getCertificatesByParticipant(p.participantId);
+        certs.forEach((cert) => {
           if (cert.status === 'Pending') return;
-          const issuedAt = parseDate(cert.issuedDate || cert.issuedAt || cert.createdAt);
+          const issuedAt = parseDate(cert.issuedDate || (cert as any).issuedAt || cert.createdAt);
           if (!issuedAt || issuedAt <= lastCheck) return;
-
           notifications.push({
-            id: `cert-${d.id}`,
+            id: `cert-${cert.id}`,
             type: 'certificate',
-            title: `${cert.certificateType || cert.type || 'Certificate'} Awarded`,
+            title: `${cert.certificateType || (cert as any).type || 'Certificate'} Awarded`,
             subtitle: cert.contestName || cert.season || 'Official CWCL certificate',
-            awardedAt: cert.issuedDate || cert.issuedAt || (cert.createdAt ? new Date(cert.createdAt as any).toISOString() : ''),
+            awardedAt: cert.issuedDate || (cert as any).issuedAt || cert.createdAt || '',
             icon: <FileText size={18} className="text-neon-cyan" />,
             link: '/dashboard/certificates',
           });
         });
-      } catch {
-        // Ignore certificate read failures.
-      }
+      } catch { /* ignore */ }
 
       // Sort newest first.
       notifications.sort((a, b) => {

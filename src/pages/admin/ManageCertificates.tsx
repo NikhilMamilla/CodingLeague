@@ -1,10 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  collection, query, orderBy, onSnapshot, doc,
-  setDoc, deleteDoc, getDocs
-} from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Certificate, Participant, CertificateType } from '../../types';
 import {
@@ -12,9 +7,8 @@ import {
   CheckCircle2, Clock, AlertTriangle, X, Loader2, Sparkles, Crown
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import {
-  renderCertificate, downloadCertificate, type CertificateData
-} from '../../lib/certificateGenerator';
+import { renderCertificate, downloadCertificate, type CertificateData } from '../../lib/certificateGenerator';
+import { getCertificates, getParticipants, upsertCertificate, deleteCertificate } from '../../lib/db';
 
 const CERT_TYPES: CertificateType[] = [
   'Participation',
@@ -56,21 +50,9 @@ export default function ManageCertificates() {
   const modalCanvasRef = useRef<HTMLCanvasElement>(null);
   const inlineCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Listen for certificates & participants
   useEffect(() => {
-    const qCerts = query(collection(db, 'certificates'), orderBy('createdAt', 'desc'));
-    const unsubCerts = onSnapshot(qCerts, (snap) => {
-      setCerts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Certificate)));
-      setLoading(false);
-    }, () => setLoading(false));
-
-    const fetchParts = async () => {
-      const snap = await getDocs(collection(db, 'participants'));
-      setParticipants(snap.docs.map((d) => ({ docId: d.id, ...d.data() } as any)));
-    };
-    fetchParts();
-
-    return () => unsubCerts();
+    getCertificates().then(list => { setCerts(list); setLoading(false); }).catch(() => setLoading(false));
+    getParticipants(2000).then(list => setParticipants(list)).catch(() => {});
   }, []);
 
   // Render canvas preview whenever previewCert state changes
@@ -150,11 +132,9 @@ export default function ManageCertificates() {
         if (!part) continue;
 
         const certId = generateCertId(i);
-
-        // Save Certificate Record into Firestore
-        const certRef = doc(collection(db, 'certificates'));
-        await setDoc(certRef, {
-          id: certRef.id,
+        const newId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${i}`;
+        await upsertCertificate({
+          id: newId,
           certificateId: certId,
           participantId: part.participantId || part.uid,
           participantName: part.fullName,
@@ -162,13 +142,14 @@ export default function ManageCertificates() {
           certificateType: certType,
           contestName,
           season,
-          position: certType === 'Winner' ? position : null,
+          position: certType === 'Winner' ? position : undefined,
           issuedDate: issuedDateStr,
           status: 'Issued',
           issuedBy: currentAdmin?.fullName || user?.email || 'Admin',
           templateId: certType.toLowerCase().replace(/\s+/g, '_'),
           createdAt: new Date().toISOString(),
         });
+        setCerts(prev => [...prev, { id: newId, certificateId: certId, participantId: part.participantId || part.uid, participantName: part.fullName, email: part.email, certificateType: certType, contestName, season, position: certType === 'Winner' ? position : undefined, issuedDate: issuedDateStr, status: 'Issued', issuedBy: currentAdmin?.fullName || user?.email || 'Admin', templateId: certType.toLowerCase().replace(/\s+/g, '_'), createdAt: new Date().toISOString() } as Certificate]);
 
         successCount++;
         setProgress({ current: successCount, total: selectedUids.length });
@@ -184,16 +165,14 @@ export default function ManageCertificates() {
     }
   }
 
-  // Delete Certificate
   async function handleDeleteCertificate() {
     if (!deleteCertTarget) return;
     try {
-      await deleteDoc(doc(db, 'certificates', deleteCertTarget.id));
+      await deleteCertificate(deleteCertTarget.id);
+      setCerts(prev => prev.filter(c => c.id !== deleteCertTarget.id));
       toast.success(`Deleted certificate ${deleteCertTarget.certificateId}`);
       setDeleteCertTarget(null);
-    } catch {
-      toast.error('Failed to delete certificate');
-    }
+    } catch { toast.error('Failed to delete certificate'); }
   }
 
   return (

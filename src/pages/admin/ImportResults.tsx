@@ -1,23 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react';
-import {
-  collection, query, orderBy, onSnapshot,
-  doc, writeBatch, getDocs, getDoc, serverTimestamp, arrayUnion,
-} from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import type { Contest, ContestDifficulty } from '../../types';
 import { getTierFromRating } from '../../types';
 import { evaluateAndAwardBadges } from '../../lib/badges';
 import {
-  calculateCWCLRatingChanges,
-  TIER_CONFIG,
-  DIFFICULTY_MULTIPLIERS,
-  getSizeMultiplier,
-  type RatingCalculationResult,
+  calculateCWCLRatingChanges, TIER_CONFIG, DIFFICULTY_MULTIPLIERS,
+  getSizeMultiplier, type RatingCalculationResult,
 } from '../../lib/ratingEngine';
 import { Upload, FileText, AlertCircle, CheckCircle, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { extractHandle } from '../../lib/profileVerification';
-import { cacheInvalidateAll } from '../../lib/cache';
+import { getContests, getParticipants, insertResult, updateContest, updateParticipant } from '../../lib/db';
 
 interface ParsedRow {
   rank: number;
@@ -68,22 +60,10 @@ export default function ImportResults() {
 
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Real-time listen to contests
+  // Load contests and participants once
   useEffect(() => {
-    const q = query(collection(db, 'contests'), orderBy('date', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      setContests(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Contest)));
-    });
-    return () => unsub();
-  }, []);
-
-  // Real-time listen to participants for preview calculations
-  useEffect(() => {
-    const q = query(collection(db, 'participants'));
-    const unsub = onSnapshot(q, (snap) => {
-      setAllParticipants(snap.docs.map((d) => ({ docId: d.id, ...d.data() })));
-    });
-    return () => unsub();
+    getContests().then(list => setContests(list.sort((a, b) => b.date.localeCompare(a.date)))).catch(() => {});
+    getParticipants(2000).then(list => setAllParticipants(list.map(p => ({ ...p, docId: p.uid })))).catch(() => {});
   }, []);
 
   // Re-calculate preview whenever rows, selected contest, or participants update
@@ -158,156 +138,80 @@ export default function ImportResults() {
   }
 
   async function handleImport() {
-    if (!selected) {
-      toast.error('Select a contest first');
-      return;
-    }
-    if (rows.length === 0) {
-      toast.error('No data to import');
-      return;
-    }
+    if (!selected) { toast.error('Select a contest first'); return; }
+    if (rows.length === 0) { toast.error('No data to import'); return; }
     setSubmitting(true);
-
     try {
       const contest = contests.find((c) => c.id === selected)!;
-
-      const partSnap = await getDocs(collection(db, 'participants'));
-      const allParts = partSnap.docs.map((d) => ({ docId: d.id, ...d.data() } as any));
-
-      const contestsSnap = await getDocs(collection(db, 'contests'));
-      const completedContests = contestsSnap.docs.filter((d) => d.data().status === 'Completed').length;
+      const allParts = allParticipants;
+      const completedContests = contests.filter(c => c.status === 'Completed').length;
       const totalContests = completedContests + 1;
-
-      const batch = writeBatch(db);
       const matchedUids: string[] = [];
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const calcRes = previewCalculations[i];
-
         const rawTarget = row.name.trim().toLowerCase();
         const targetCleanHandle = extractHandle('generic', row.name).toLowerCase();
 
         const match = allParts.find((p: any) => {
           if (p.fullName?.toLowerCase() === rawTarget) return true;
           if (p.participantId?.toLowerCase() === rawTarget) return true;
-          const cfHandle = p.codeforcesHandle ? extractHandle('codeforcesHandle', p.codeforcesHandle).toLowerCase() : '';
-          const lcHandle = p.leetcodeUsername ? extractHandle('leetcodeUsername', p.leetcodeUsername).toLowerCase() : '';
-          const ccHandle = p.codechefUsername ? extractHandle('codechefUsername', p.codechefUsername).toLowerCase() : '';
-          const hrHandle = p.hackerrankUsername ? extractHandle('hackerrankUsername', p.hackerrankUsername).toLowerCase() : '';
-          const gfgHandle = p.gfgUsername ? extractHandle('gfgUsername', p.gfgUsername).toLowerCase() : '';
-
-          return (
-            cfHandle === rawTarget || cfHandle === targetCleanHandle ||
-            lcHandle === rawTarget || lcHandle === targetCleanHandle ||
-            ccHandle === rawTarget || ccHandle === targetCleanHandle ||
-            hrHandle === rawTarget || hrHandle === targetCleanHandle ||
-            gfgHandle === rawTarget || gfgHandle === targetCleanHandle ||
-            p.codeforcesHandle?.toLowerCase() === rawTarget ||
-            p.leetcodeUsername?.toLowerCase() === rawTarget ||
-            p.codechefUsername?.toLowerCase() === rawTarget ||
-            p.hackerrankUsername?.toLowerCase() === rawTarget ||
-            p.gfgUsername?.toLowerCase() === rawTarget
-          );
+          const cf = p.codeforcesHandle ? extractHandle('codeforcesHandle', p.codeforcesHandle).toLowerCase() : '';
+          const lc = p.leetcodeUsername ? extractHandle('leetcodeUsername', p.leetcodeUsername).toLowerCase() : '';
+          const cc = p.codechefUsername ? extractHandle('codechefUsername', p.codechefUsername).toLowerCase() : '';
+          const hr = p.hackerrankUsername ? extractHandle('hackerrankUsername', p.hackerrankUsername).toLowerCase() : '';
+          const gfg = p.gfgUsername ? extractHandle('gfgUsername', p.gfgUsername).toLowerCase() : '';
+          return cf === rawTarget || cf === targetCleanHandle || lc === rawTarget || lc === targetCleanHandle ||
+            cc === rawTarget || cc === targetCleanHandle || hr === rawTarget || hr === targetCleanHandle ||
+            gfg === rawTarget || gfg === targetCleanHandle ||
+            p.codeforcesHandle?.toLowerCase() === rawTarget || p.leetcodeUsername?.toLowerCase() === rawTarget ||
+            p.codechefUsername?.toLowerCase() === rawTarget || p.hackerrankUsername?.toLowerCase() === rawTarget ||
+            p.gfgUsername?.toLowerCase() === rawTarget;
         });
 
         const ratingBefore = calcRes ? calcRes.previousRating : match?.rating ?? 800;
-        const ratingAfter = calcRes ? calcRes.newRating : ratingBefore;
-        const ratingChange = calcRes ? calcRes.ratingChange : 0;
-        const leaguePoints = calcRes ? calcRes.leaguePoints : 10;
+        const ratingAfter  = calcRes ? calcRes.newRating      : ratingBefore;
+        const ratingChange = calcRes ? calcRes.ratingChange    : 0;
+        const leaguePoints = calcRes ? calcRes.leaguePoints    : 10;
         const newTier = getTierFromRating(ratingAfter);
 
-        // Write contest result doc
-        const resultRef = doc(collection(db, 'contestResults'));
-        batch.set(resultRef, {
-          contestId: selected,
-          contestName: contest.name,
-          participantId: match?.participantId ?? null,
-          participantName: row.name,
-          college: match?.college ?? 'Unknown',
-          rank: row.rank,
-          score: row.score,
-          penalty: row.penalty,
-          problemsSolved: row.solved ?? 0,
-          leaguePoints,
-          ratingBefore,
-          ratingAfter,
-          ratingChange,
-          importedAt: serverTimestamp(),
-        });
+        await insertResult({
+          contestId: selected, contestName: contest.name,
+          participantId: match?.participantId ?? null, participantName: row.name,
+          college: match?.college ?? 'Unknown', rank: row.rank, score: row.score,
+          penalty: row.penalty, problemsSolved: row.solved ?? 0, leaguePoints,
+          ratingBefore, ratingAfter, ratingChange,
+          importedAt: new Date().toISOString(),
+        } as any);
 
-        // Update matched participant doc
-        if (match?.docId) {
-          matchedUids.push(match.docId);
-
-          const partDocRef = doc(db, 'participants', match.docId);
-          const partDocSnap = await getDoc(partDocRef);
-          const partData = partDocSnap.data() as any;
-
-          const newContestsCount = (partData?.contestsParticipated ?? 0) + 1;
+        if (match?.uid) {
+          matchedUids.push(match.uid);
+          const newContestsCount = (match.contestsParticipated ?? 0) + 1;
           const newAttendance = Math.min(100, Math.round((newContestsCount / totalContests) * 100));
-
-          const currentPeakRating = Math.max(partData?.peakRating ?? 800, ratingAfter);
-          const currentPeakTitle = getTierFromRating(currentPeakRating);
-          const newStreak = (partData?.streak ?? 0) + 1;
-          const newMonthlyPoints = (partData?.monthlyPoints ?? 0) + leaguePoints;
-
-          const historyItem = {
-            contestId: selected,
-            contestName: contest.name,
-            contestDate: contest.date,
-            rank: row.rank,
-            previousRating: ratingBefore,
-            newRating: ratingAfter,
-            ratingChange,
-          };
-
-          batch.update(partDocRef, {
-            rating: ratingAfter,
-            tier: newTier,
-            peakRating: currentPeakRating,
-            peakTitle: currentPeakTitle,
-            monthlyPoints: newMonthlyPoints,
-            streak: newStreak,
-            lastContestDate: contest.date,
-            contestsParticipated: newContestsCount,
-            attendance: newAttendance,
-            ratingHistory: arrayUnion(historyItem),
+          const currentPeakRating = Math.max(match.peakRating ?? 800, ratingAfter);
+          const existingHistory: any[] = Array.isArray(match.ratingHistory) ? match.ratingHistory : [];
+          await updateParticipant(match.uid, {
+            rating: ratingAfter, tier: newTier,
+            peak_rating: currentPeakRating, peak_title: getTierFromRating(currentPeakRating),
+            monthly_points: (match.monthlyPoints ?? 0) + leaguePoints,
+            streak: (match.streak ?? 0) + 1, last_contest_date: contest.date,
+            contests_participated: newContestsCount, attendance: newAttendance,
+            rating_history: [...existingHistory, { contestId: selected, contestName: contest.name, contestDate: contest.date, rank: row.rank, previousRating: ratingBefore, newRating: ratingAfter, ratingChange }],
           });
         }
       }
 
-      // Mark contest as completed & lock calculations
-      batch.update(doc(db, 'contests', selected), {
-        status: 'Completed',
-        ratingCalculated: true,
-        resultsPublished: true,
-        lockedAt: serverTimestamp(),
-      });
-
-      await batch.commit();
-      // Invalidate all caches so leaderboard/schedule reflect new results immediately
-      cacheInvalidateAll();
+      await updateContest(selected, { status: 'Completed', ratingCalculated: true, resultsPublished: true, lockedAt: new Date().toISOString() } as any);
       toast.success(`✅ CWCL v1.0 Rating calculations published for ${contest.name}!`);
 
-      // Evaluate badges
       let badgeCount = 0;
       for (const uid of matchedUids) {
-        try {
-          const awarded = await evaluateAndAwardBadges(uid);
-          badgeCount += awarded.length;
-        } catch {
-          /**/
-        }
+        try { const awarded = await evaluateAndAwardBadges(uid); badgeCount += awarded.length; } catch { /**/ }
       }
+      if (badgeCount > 0) toast.success(`🎖️ Awarded ${badgeCount} new badge${badgeCount !== 1 ? 's' : ''}!`);
 
-      if (badgeCount > 0) {
-        toast.success(`🎖️ Awarded ${badgeCount} new badge${badgeCount !== 1 ? 's' : ''}!`);
-      }
-
-      setRows([]);
-      setFileName('');
-      setSelected('');
+      setRows([]); setFileName(''); setSelected('');
       if (fileRef.current) fileRef.current.value = '';
     } catch (e: any) {
       toast.error(e.message ?? 'Import failed');

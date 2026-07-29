@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { doc, setDoc, getDoc, collection, query, where, getDocs, writeBatch, orderBy, limit } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { getSetting, setSetting, getParticipants, updateParticipant } from '../../lib/db';
+import { supabase } from '../../lib/supabase';
 import { Settings, Save, Crown, Users, Calendar, AlertTriangle, Sparkles, RotateCcw } from 'lucide-react';
 import { syncFoundingCounter } from '../../lib/foundingMembers';
 import toast from 'react-hot-toast';
@@ -30,21 +30,20 @@ export default function FoundingMemberSettings() {
 
   useEffect(() => {
     async function load() {
-      const [settingsSnap, countSnap] = await Promise.all([
-        getDoc(doc(db, 'settings', 'foundingMembers')),
-        getDocs(query(collection(db, 'participants'), where('foundingMember', '==', true))),
+      const [settingsData, { count: foundingCount }] = await Promise.all([
+        getSetting('foundingMembers'),
+        supabase.from('participants').select('*', { count: 'exact', head: true }).eq('founding_member', true),
       ]);
-      if (settingsSnap.exists()) {
-        const data = settingsSnap.data() as Partial<FoundingSettings>;
+      if (settingsData) {
         setSettings({
-          enabled: data.enabled ?? DEFAULTS.enabled,
-          maxFoundingMembers: data.maxFoundingMembers ?? DEFAULTS.maxFoundingMembers,
-          cutOffDate: data.cutOffDate ?? DEFAULTS.cutOffDate,
-          seasonId: data.seasonId ?? DEFAULTS.seasonId,
-          seasonLabel: data.seasonLabel ?? DEFAULTS.seasonLabel,
+          enabled: settingsData.enabled ?? DEFAULTS.enabled,
+          maxFoundingMembers: settingsData.maxFoundingMembers ?? DEFAULTS.maxFoundingMembers,
+          cutOffDate: settingsData.cutOffDate ?? DEFAULTS.cutOffDate,
+          seasonId: settingsData.seasonId ?? DEFAULTS.seasonId,
+          seasonLabel: settingsData.seasonLabel ?? DEFAULTS.seasonLabel,
         });
       }
-      setCount(countSnap.size);
+      setCount(foundingCount ?? 0);
       setLoading(false);
     }
     load();
@@ -57,7 +56,7 @@ export default function FoundingMemberSettings() {
   async function handleSave() {
     setSaving(true);
     try {
-      await setDoc(doc(db, 'settings', 'foundingMembers'), {
+      await setSetting('foundingMembers', {
         ...settings,
         updatedAt: new Date().toISOString(),
       });
@@ -83,23 +82,17 @@ export default function FoundingMemberSettings() {
     setBackfilling(true);
     try {
       const cutOff = settings.cutOffDate ? new Date(settings.cutOffDate) : null;
-      // Use a single-field orderBy on createdAt so no composite index is required.
-      // Admin/super-admin accounts and already-awarded participants are filtered client-side.
-      const q = query(
-        collection(db, 'participants'),
-        orderBy('createdAt', 'asc'),
-        limit(Math.max(500, remaining + count + 100))
-      );
-      const snap = await getDocs(q);
-      const eligible = snap.docs
-        .map(d => ({ uid: d.id, ...d.data() } as any))
-        .filter((p: any) => p.role !== 'admin' && p.role !== 'super_admin')
-        .filter((p: any) => !p.foundingMember)
-        .filter((p: any) => {
+
+      // Fetch all participants ordered by created_at
+      const allParticipants = await getParticipants(2000);
+      const eligible = allParticipants
+        .filter(p => (p as any).role !== 'admin' && (p as any).role !== 'super_admin')
+        .filter(p => !p.foundingMember)
+        .filter(p => {
           if (!cutOff || !p.createdAt) return true;
-          const created = new Date(p.createdAt);
-          return created <= cutOff;
+          return new Date(p.createdAt) <= cutOff;
         })
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
         .slice(0, remaining);
 
       if (eligible.length === 0) {
@@ -108,44 +101,42 @@ export default function FoundingMemberSettings() {
         return;
       }
 
-      // Re-count current founding members right before writing so ranks are always sequential.
-      const currentCountSnap = await getDocs(
-        query(collection(db, 'participants'), where('foundingMember', '==', true))
-      );
-      const currentCount = currentCountSnap.size;
+      // Get current count right before writing
+      const { count: currentCount } = await supabase
+        .from('participants')
+        .select('*', { count: 'exact', head: true })
+        .eq('founding_member', true);
 
-      const batch = writeBatch(db);
-      eligible.forEach((p: any, idx: number) => {
-        const ref = doc(db, 'participants', p.uid);
-        const hasBadge = (p.badges || []).some((b: any) => b.type === 'founding_member');
-        const awardedAt = new Date().toISOString();
-        batch.update(ref, {
-          foundingMember: true,
-          foundingRank: currentCount + idx + 1,
-          foundingAwardedAt: awardedAt,
-          foundingSeasonId: settings.seasonId,
-          badges: hasBadge
-            ? p.badges
-            : [
-                ...(p.badges || []),
-                {
-                  type: 'founding_member',
-                  label: 'Founding Member',
-                  emoji: '🏅',
-                  awardedAt,
-                },
-              ],
+      const base = currentCount ?? 0;
+      const awardedAt = new Date().toISOString();
+
+      for (let idx = 0; idx < eligible.length; idx++) {
+        const p = eligible[idx];
+        const hasBadge = (p.badges ?? []).some((b: any) => b.type === 'founding_member');
+        const newBadges = hasBadge
+          ? p.badges
+          : [
+              ...(p.badges ?? []),
+              { type: 'founding_member', label: 'Founding Member', emoji: '🏅', awardedAt },
+            ];
+
+        await updateParticipant(p.uid, {
+          founding_member: true,
+          founding_rank: base + idx + 1,
+          founding_awarded_at: awardedAt,
+          founding_season_id: settings.seasonId,
+          badges: newBadges,
         });
-      });
-      await batch.commit();
+      }
 
-      // Keep the atomic counter in sync with the real count.
+      // Keep the counter in sync
       await syncFoundingCounter();
 
-      const newCountSnap = await getDocs(
-        query(collection(db, 'participants'), where('foundingMember', '==', true))
-      );
-      setCount(newCountSnap.size);
+      const { count: newCount } = await supabase
+        .from('participants')
+        .select('*', { count: 'exact', head: true })
+        .eq('founding_member', true);
+      setCount(newCount ?? 0);
       toast.success(`Backfilled ${eligible.length} founding member(s)`);
     } catch (e: any) {
       toast.error(e.message || 'Backfill failed');

@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { doc, onSnapshot, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
+import { getSetting, getAnnouncements } from '../../lib/db';
 import { motion } from 'framer-motion';
 import {
   Users, MessageCircle, Megaphone, Globe,
@@ -267,50 +266,16 @@ export default function Community() {
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(true);
 
   useEffect(() => {
-    const unsubComm = onSnapshot(
-      doc(db, 'settings', 'community'),
-      snap => {
-        if (snap.exists()) {
-          const d = snap.data();
-          setCommunity({
-            announcementWhatsapp: d.announcementWhatsapp ?? '',
-            discussionWhatsapp: d.discussionWhatsapp ?? '',
-            discord: d.discord ?? '',
-          });
-        }
-        setLoadingCommunity(false);
-      },
-      () => setLoadingCommunity(false)
-    );
-
-    const unsubSocial = onSnapshot(
-      doc(db, 'settings', 'social'),
-      snap => {
-        if (snap.exists()) {
-          const d = snap.data();
-          setSocial({
-            instagram: d.instagram ?? '',
-            linkedin: d.linkedin ?? '',
-            twitter: d.twitter ?? '',
-            website: d.website ?? '',
-          });
-        }
-        setLoadingSocial(false);
-      },
-      () => setLoadingSocial(false)
-    );
-
-    // Latest 3 announcements
-    (async () => {
-      try {
-        const q = query(collection(db, 'announcements'), orderBy('createdAt', 'desc'), limit(3));
-        const snap = await getDocs(q);
-        setAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() } as Announcement & { id: string })));
-      } catch { /* ignore */ }
-      setLoadingAnnouncements(false);
-    })();
-
-    return () => { unsubComm(); unsubSocial(); };
+    Promise.all([
+      getSetting('community'),
+      getSetting('social'),
+      getAnnouncements(3),
+    ]).then(([commData, socialData, announcements]) => {
+      if (commData) setCommunity({ announcementWhatsapp: commData.announcementWhatsapp ?? '', discussionWhatsapp: commData.discussionWhatsapp ?? '', discord: commData.discord ?? '' });
+      if (socialData) setSocial({ instagram: socialData.instagram ?? '', linkedin: socialData.linkedin ?? '', twitter: socialData.twitter ?? '', website: socialData.website ?? '' });
+      setAnnouncements(announcements);
+      setLoadingCommunity(false); setLoadingSocial(false); setLoadingAnnouncements(false);
+    }).catch(() => { setLoadingCommunity(false); setLoadingSocial(false); setLoadingAnnouncements(false); });
   }, []);
 
   const faqs = [

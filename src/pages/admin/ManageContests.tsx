@@ -1,10 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  collection, query, orderBy, onSnapshot,
-  addDoc, deleteDoc, updateDoc, doc, serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import type { Contest, ContestMode, ContestStatus, ContestDifficulty } from '../../types';
 import {
   Plus, Trash2, Calendar, X, Clock, Archive,
@@ -12,7 +7,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
-import { cacheInvalidate } from '../../lib/cache';
+import { getContests, insertContest, updateContest, insertAnnouncement } from '../../lib/db';
 
 const EMPTY = {
   name: '', weekNumber: '', mode: 'Online' as ContestMode,
@@ -54,12 +49,7 @@ export default function ManageContests() {
 
   useEffect(() => {
     setLoading(true);
-    const q = query(collection(db, 'contests'), orderBy('date', 'asc'));
-    const unsub = onSnapshot(q, snap => {
-      setContests(snap.docs.map(d => ({ id: d.id, ...d.data() } as Contest)));
-      setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
+    getContests().then(list => { setContests(list); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
   function setField(field: string, value: string) { setForm(f => ({ ...f, [field]: value })); }
@@ -77,25 +67,21 @@ export default function ManageContests() {
     }
     setSaving(true);
     try {
-      await addDoc(collection(db, 'contests'), {
-        name:          form.name,
-        contestNumber: contests.length + 1,
-        weekNumber:    parseInt(form.weekNumber) || contests.length + 1,
-        mode:          form.mode,
-        date:          form.date,
-        startTime:     form.startTime,
-        endTime:       form.endTime,
-        duration:      parseInt(form.duration) || 120,
-        platform:      form.platform || null,
-        contestLink:   form.contestLink || null,
-        venue:         form.venue || null,
-        problemSetter: form.problemSetter || null,
-        instructions:  form.instructions || null,
-        status:        'Upcoming' as ContestStatus,
-        seasonId:      'cwcl-2026-27',
-        createdAt:     serverTimestamp(),
-      });
-      cacheInvalidate('contests:all');
+      await insertContest({
+        name: form.name, contestNumber: contests.length + 1,
+        weekNumber: parseInt(form.weekNumber) || contests.length + 1, mode: form.mode,
+        date: form.date, startTime: form.startTime, endTime: form.endTime,
+        duration: parseInt(form.duration) || 120,
+        platform: form.platform || undefined,
+        contestLink: form.contestLink || undefined,
+        venue: form.venue || undefined,
+        problemSetter: form.problemSetter || undefined,
+        instructions: form.instructions || undefined,
+        status: 'Upcoming' as ContestStatus, seasonId: 'cwcl-2026-27',
+        difficulty: form.difficulty, createdAt: new Date().toISOString(),
+      } as any);
+      const refreshed = await getContests();
+      setContests(refreshed);
       toast.success('Contest created successfully!');
       setForm(EMPTY);
       setShowCreateModal(false);
@@ -108,21 +94,18 @@ export default function ManageContests() {
     if (!editingContest) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, 'contests', editingContest.id), {
-        name: editingContest.name,
-        weekNumber: Number(editingContest.weekNumber) || 1,
-        mode: editingContest.mode,
-        date: editingContest.date,
-        startTime: editingContest.startTime,
-        endTime: editingContest.endTime,
+      await updateContest(editingContest.id, {
+        name: editingContest.name, weekNumber: Number(editingContest.weekNumber) || 1,
+        mode: editingContest.mode, date: editingContest.date,
+        startTime: editingContest.startTime, endTime: editingContest.endTime,
         duration: Number(editingContest.duration) || 120,
-        platform: editingContest.platform || null,
-        contestLink: editingContest.contestLink || null,
-        venue: editingContest.venue || null,
-        problemSetter: editingContest.problemSetter || null,
-        instructions: editingContest.instructions || null,
-      });
-      cacheInvalidate('contests:all');
+        platform: editingContest.platform || undefined,
+        contestLink: editingContest.contestLink || undefined,
+        venue: editingContest.venue || undefined,
+        problemSetter: editingContest.problemSetter || undefined,
+        instructions: editingContest.instructions || undefined,
+      } as any);
+      setContests(prev => prev.map(c => c.id === editingContest.id ? { ...c, ...editingContest } : c));
       toast.success('Contest updated successfully!');
       setEditingContest(null);
     } catch (e: any) {
@@ -132,84 +115,60 @@ export default function ManageContests() {
     }
   }
 
-  // Quick Link Save
   async function handleSaveQuickLink() {
     if (!linkModalContest) return;
     try {
-      await updateDoc(doc(db, 'contests', linkModalContest.id), {
-        contestLink: inputLink.trim() || null,
-      });
+      await updateContest(linkModalContest.id, { contestLink: inputLink.trim() || null } as any);
+      setContests(prev => prev.map(c => c.id === linkModalContest.id ? { ...c, contestLink: inputLink.trim() || undefined } : c));
       toast.success('Contest link saved!');
       setLinkModalContest(null);
-    } catch {
-      toast.error('Failed to save contest link');
-    }
+    } catch { toast.error('Failed to save contest link'); }
   }
 
-  // Delete Contest
   async function handleDelete(id: string) {
     if (!confirm('Delete this contest? Cannot be undone.')) return;
     try {
-      await deleteDoc(doc(db, 'contests', id));
-      cacheInvalidate('contests:all');
+      await import('../../lib/db').then(m => m.deleteContest(id));
+      setContests(prev => prev.filter(c => c.id !== id));
       toast.success('Contest deleted');
     } catch (e: any) { toast.error(e.message); }
   }
 
-  // Handle Status Change Dropdown
   async function handleStatusSelect(c: Contest, newStatus: ContestStatus) {
     if (newStatus === 'Active') {
-      // Open Activation Modal to verify/input link and optionally broadcast announcement
-      setActivatingContest(c);
-      setActivateLink(c.contestLink || '');
-      setSendAnnouncement(true);
+      setActivatingContest(c); setActivateLink(c.contestLink || ''); setSendAnnouncement(true);
       return;
     }
-
     try {
-      await updateDoc(doc(db, 'contests', c.id), { status: newStatus });
+      await updateContest(c.id, { status: newStatus } as any);
+      setContests(prev => prev.map(x => x.id === c.id ? { ...x, status: newStatus } : x));
       toast.success(`Contest marked as ${newStatus}`);
     } catch (e: any) { toast.error(e.message); }
   }
 
-  // Confirm Activation & Broadcast
   async function confirmActivation() {
     if (!activatingContest) return;
-
     if (activatingContest.mode === 'Online' && !activateLink.trim()) {
-      toast.error('Please enter the Contest Link before marking as Active!');
-      return;
+      toast.error('Please enter the Contest Link before marking as Active!'); return;
     }
-
     setSaving(true);
     try {
-      // 1. Update contest status and link in Firestore
-      await updateDoc(doc(db, 'contests', activatingContest.id), {
-        status: 'Active',
-        contestLink: activateLink.trim() || null,
-      });
-
-      // 2. Broadcast Announcement if enabled
+      await updateContest(activatingContest.id, { status: 'Active', contestLink: activateLink.trim() || null } as any);
+      setContests(prev => prev.map(c => c.id === activatingContest.id ? { ...c, status: 'Active' as const, contestLink: activateLink.trim() || undefined } : c));
       if (sendAnnouncement) {
-        await addDoc(collection(db, 'announcements'), {
+        await insertAnnouncement({
           title: `🚨 LIVE MATCH: ${activatingContest.name}`,
-          body: `The CWCL contest is officially LIVE NOW!\n\nPlatform: ${activatingContest.platform || 'Online'}\n${
-            activateLink.trim() ? `Join Contest Link: ${activateLink.trim()}\n\n` : ''
-          }Click the link to enter the match and compete! Good luck participants!`,
+          body: `The CWCL contest is officially LIVE NOW!\n\nPlatform: ${activatingContest.platform || 'Online'}\n${activateLink.trim() ? `Join Contest Link: ${activateLink.trim()}\n\n` : ''}Click the link to enter the match and compete! Good luck participants!`,
           category: 'Contest',
           createdBy: participant?.fullName || user?.email || 'Admin',
-          createdAt: serverTimestamp(),
+          createdAt: new Date().toISOString(),
         });
-        toast.success('Live Match Announcement broadcasted to all participants!');
+        toast.success('Live Match Announcement broadcasted!');
       }
-
-      toast.success(`Contest is now LIVE & ACTIVE!`);
+      toast.success('Contest is now LIVE & ACTIVE!');
       setActivatingContest(null);
-    } catch (e: any) {
-      toast.error(e.message || 'Activation failed');
-    } finally {
-      setSaving(false);
-    }
+    } catch (e: any) { toast.error(e.message || 'Activation failed'); }
+    finally { setSaving(false); }
   }
 
   function copyToClipboard(text: string) {

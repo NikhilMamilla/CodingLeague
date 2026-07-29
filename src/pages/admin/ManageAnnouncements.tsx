@@ -1,13 +1,9 @@
 import { useEffect, useState } from 'react';
-import {
-  collection, query, orderBy, onSnapshot,
-  addDoc, deleteDoc, doc, serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Announcement, AnnouncementCategory } from '../../types';
 import { Megaphone, Plus, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getAnnouncements, insertAnnouncement, deleteAnnouncement } from '../../lib/db';
 
 const CATEGORIES: AnnouncementCategory[] = [
   'Workshop', 'Hackathon', 'Contest', 'Results', 'Recruitment', 'Sponsors',
@@ -33,12 +29,7 @@ export default function ManageAnnouncements() {
   const [saving,   setSaving]   = useState(false);
 
   useEffect(() => {
-    const q = query(collection(db, 'announcements'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, snap => {
-      setAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() } as Announcement & { id: string })));
-      setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
+    getAnnouncements(100).then(list => { setAnnouncements(list); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
   function set(field: string, value: string) { setForm(f => ({ ...f, [field]: value })); }
@@ -47,16 +38,13 @@ export default function ManageAnnouncements() {
     if (!form.title.trim() || !form.body.trim()) { toast.error('Title and body required'); return; }
     setSaving(true);
     try {
-      await addDoc(collection(db, 'announcements'), {
-        title:     form.title,
-        body:      form.body,
-        category:  form.category,
-        createdBy: participant?.participantId ?? 'admin',
-        createdAt: serverTimestamp(),
+      const id = await insertAnnouncement({
+        title: form.title, body: form.body, category: form.category,
+        createdBy: participant?.participantId ?? 'admin', createdAt: new Date().toISOString(),
       });
+      setAnnouncements(prev => [{ id, ...form, createdBy: participant?.participantId ?? 'admin', createdAt: new Date().toISOString() }, ...prev]);
       toast.success('Announcement posted!');
-      setForm(EMPTY);
-      setShowForm(false);
+      setForm(EMPTY); setShowForm(false);
     } catch (e: any) { toast.error(e.message); }
     finally { setSaving(false); }
   }
@@ -64,7 +52,8 @@ export default function ManageAnnouncements() {
   async function handleDelete(id: string) {
     if (!confirm('Delete this announcement?')) return;
     try {
-      await deleteDoc(doc(db, 'announcements', id));
+      await deleteAnnouncement(id);
+      setAnnouncements(prev => prev.filter(a => a.id !== id));
       toast.success('Deleted');
     } catch (e: any) { toast.error(e.message); }
   }

@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Crown, Search, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
-import type { Participant } from '../../types';
 import CBBLogo from '../../components/ui/CBBLogo';
+import type { Participant } from '../../types';
+import { getFoundingMembers } from '../../lib/db';
 
 const PAGE_SIZE = 12;
 
@@ -15,16 +14,7 @@ export default function FoundingMembers() {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    const q = query(
-      collection(db, 'participants'),
-      where('foundingMember', '==', true),
-      orderBy('foundingRank', 'asc')
-    );
-    const unsub = onSnapshot(q, snap => {
-      setMembers(snap.docs.map(d => ({ uid: d.id, ...d.data() } as Participant)));
-      setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
+    getFoundingMembers().then(list => { setMembers(list); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
   const filtered = useMemo(() => {

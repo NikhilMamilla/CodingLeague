@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import { evaluateAndAwardBadges, evaluateAllParticipants, awardBadge, revokeBadge } from '../../lib/badges';
 import type { Participant, BadgeType } from '../../types';
 import { BADGE_META } from '../../types';
 import { Shield, Play, Zap, Award, X, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getParticipants } from '../../lib/db';
 
 export default function ManageBadges() {
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -17,16 +16,10 @@ export default function ManageBadges() {
   const [showAwardModal, setShowAwardModal] = useState(false);
 
   useEffect(() => {
-    const q = query(collection(db, 'participants'), orderBy('rating', 'desc'));
-    const unsub = onSnapshot(q, snap => {
-      setParticipants(
-        snap.docs
-          .map(d => ({ uid: d.id, ...d.data() } as Participant))
-          .filter(p => (p as any).role !== 'admin')
-      );
+    getParticipants(500).then(data => {
+      setParticipants(data.filter(p => p.role !== 'admin'));
       setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
+    }).catch(() => setLoading(false));
   }, []);
 
   const filtered = participants.filter(p =>

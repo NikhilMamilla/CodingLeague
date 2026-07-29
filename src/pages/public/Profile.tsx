@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import {
-  collection, query, where, onSnapshot, orderBy, limit,
-} from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import { Globe, ExternalLink, Trophy, Star, Award } from 'lucide-react';
 import type { Participant, ContestResult } from '../../types';
 import { BADGE_META } from '../../types';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { TIER_CONFIG } from '../../lib/ratingEngine';
-
 import { getCanonicalProfileUrl } from '../../lib/profileVerification';
+import { supabase } from '../../lib/supabase';
+import { rowToParticipant, rowToResult } from '../../lib/db';
 
 export default function Profile() {
   const { participantId } = useParams<{ participantId: string }>();
@@ -20,48 +17,18 @@ export default function Profile() {
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    let unsubProfile: (() => void) | null = null;
-    let unsubResults: (() => void) | null = null;
-
-    // Real-time listener for profile
-    const profileQuery = query(
-      collection(db, 'participants'),
-      where('participantId', '==', participantId),
-      limit(1)
-    );
-    unsubProfile = onSnapshot(
-      profileQuery,
-      (snap) => {
-        if (snap.empty) {
-          setNotFound(true);
-          setLoading(false);
-          return;
-        }
-        const data = snap.docs[0].data() as Participant;
-        setProfile(data);
-
-        // Real-time listener for results (only if profile found)
-        const resultsQuery = query(
-          collection(db, 'contestResults'),
-          where('participantId', '==', participantId),
-          orderBy('contestId', 'desc'),
-          limit(20)
-        );
-        unsubResults = onSnapshot(resultsQuery, (rsnap) => {
-          setResults(rsnap.docs.map(d => d.data() as ContestResult));
-          setLoading(false);
-        });
-      },
-      () => {
-        setNotFound(true);
-        setLoading(false);
-      }
-    );
-
-    return () => {
-      if (unsubProfile) unsubProfile();
-      if (unsubResults) unsubResults();
-    };
+    if (!participantId) return;
+    setLoading(true);
+    (async () => {
+      try {
+        const { data } = await supabase.from('participants').select('*').eq('participant_id', participantId).maybeSingle();
+        if (!data) { setNotFound(true); setLoading(false); return; }
+        setProfile(rowToParticipant(data));
+        const { data: rData } = await supabase.from('contest_results').select('*').eq('participant_id', participantId).order('imported_at', { ascending: false }).limit(20);
+        setResults((rData ?? []).map(rowToResult));
+      } catch { setNotFound(true); }
+      finally { setLoading(false); }
+    })();
   }, [participantId]);
 
   if (loading) return (

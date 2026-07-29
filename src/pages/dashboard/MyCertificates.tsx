@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { Award, Download, CheckCircle2, Clock, Share2, ShieldCheck, Crown } from 'lucide-react';
 import type { Certificate } from '../../types';
 import toast from 'react-hot-toast';
 import { downloadCertificate, downloadFoundingCertificate } from '../../lib/certificateGenerator';
 import FoundingMemberBadge from '../../components/ui/FoundingMemberBadge';
+import { getCertificatesByParticipant } from '../../lib/db';
 
 const TYPE_EMOJI: Record<string, string> = {
   Winner: '🏆',
@@ -21,35 +20,10 @@ export default function MyCertificates() {
 
   useEffect(() => {
     if (!participant) return;
-
-    // Real-time listener for student certificates
-    const q1 = query(
-      collection(db, 'certificates'),
-      where('participantId', '==', participant.participantId),
-      orderBy('createdAt', 'desc')
-    );
-
-    const unsub1 = onSnapshot(
-      q1,
-      (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Certificate));
-        setCerts(list);
-        setLoading(false);
-      },
-      async () => {
-        const q2 = query(
-          collection(db, 'certificates'),
-          where('email', '==', participant.email)
-        );
-        onSnapshot(q2, (snap2) => {
-          setCerts(snap2.docs.map((d) => ({ id: d.id, ...d.data() } as Certificate)));
-          setLoading(false);
-        });
-      }
-    );
-
-    return () => unsub1();
-  }, [participant]);
+    getCertificatesByParticipant(participant.participantId)
+      .then(list => { setCerts(list); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [participant?.participantId]);
 
   if (!participant) return null;
 

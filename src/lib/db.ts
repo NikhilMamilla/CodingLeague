@@ -1,0 +1,408 @@
+/**
+ * Central data access layer — all app code imports from here.
+ * Backend: Supabase Postgres. Auth: Firebase (unchanged).
+ */
+import { supabase } from './supabase';
+import type { Participant, Contest, ContestResult, Certificate, Announcement, Sponsor } from '../types';
+
+// ── Row → App type converters ─────────────────────────────────────────────────
+
+export function rowToParticipant(r: any): Participant & { hackerrankUrl?: string; codechefUrl?: string; leetcodeUrl?: string; codeforcesUrl?: string; gfgUrl?: string } {
+  return {
+    uid: r.uid,
+    participantId: r.participant_id,
+    fullName: r.full_name,
+    email: r.email,
+    phone: r.phone,
+    college: r.college,
+    university: r.university,
+    year: r.year,
+    branch: r.branch,
+    city: r.city,
+    state: r.state,
+    codeforcesHandle: r.codeforces_handle,
+    leetcodeUsername: r.leetcode_username,
+    codechefUsername: r.codechef_username,
+    hackerrankUsername: r.hackerrank_username,
+    gfgUsername: r.gfg_username,
+    hackerrankUrl: r.hackerrank_url,
+    codechefUrl: r.codechef_url,
+    leetcodeUrl: r.leetcode_url,
+    codeforcesUrl: r.codeforces_url,
+    gfgUrl: r.gfg_url,
+    github: r.github,
+    linkedin: r.linkedin,
+    photoURL: r.photo_url,
+    bio: r.bio,
+    rating: r.rating ?? 800,
+    peakRating: r.peak_rating,
+    peakTitle: r.peak_title,
+    streak: r.streak ?? 0,
+    lastContestDate: r.last_contest_date,
+    ratingHistory: r.rating_history ?? [],
+    tier: r.tier ?? 'Beginner',
+    role: r.role ?? 'participant',
+    badges: r.badges ?? [],
+    contestsParticipated: r.contests_participated ?? 0,
+    attendance: r.attendance ?? 0,
+    monthlyPoints: r.monthly_points ?? 0,
+    createdAt: r.created_at,
+    emailVerified: r.email_verified ?? false,
+    foundingMember: r.founding_member ?? false,
+    foundingRank: r.founding_rank,
+    foundingAwardedAt: r.founding_awarded_at,
+    foundingSeasonId: r.founding_season_id,
+  };
+}
+
+export function rowToContest(r: any): Contest {
+  return {
+    id: r.id,
+    contestNumber: r.contest_number,
+    name: r.name,
+    weekNumber: r.week_number,
+    mode: r.mode,
+    date: r.date,
+    startTime: r.start_time,
+    endTime: r.end_time,
+    duration: r.duration,
+    platform: r.platform,
+    contestLink: r.contest_link,
+    venue: r.venue,
+    problemSetter: r.problem_setter,
+    instructions: r.instructions,
+    status: r.status,
+    seasonId: r.season_id,
+    difficulty: r.difficulty,
+    ratingCalculated: r.rating_calculated,
+    resultsPublished: r.results_published,
+    lockedAt: r.locked_at,
+    createdAt: r.created_at,
+  };
+}
+
+export function rowToResult(r: any): ContestResult {
+  return {
+    id: r.id,
+    contestId: r.contest_id,
+    participantId: r.participant_id,
+    participantName: r.participant_name,
+    college: r.college,
+    rank: r.rank,
+    score: r.score,
+    penalty: r.penalty,
+    problemsSolved: r.problems_solved,
+    leaguePoints: r.league_points,
+    ratingBefore: r.rating_before,
+    ratingAfter: r.rating_after,
+    ratingChange: r.rating_change,
+    // extra fields beyond base type
+    ...(r.contest_name  != null && { contestName:  r.contest_name  }),
+    ...(r.imported_at   != null && { importedAt:   r.imported_at   }),
+  } as any;
+}
+
+export function rowToCertificate(r: any): Certificate {
+  return {
+    id: r.id,
+    certificateId: r.certificate_id,
+    participantId: r.participant_id,
+    participantName: r.participant_name,
+    email: r.email,
+    certificateType: r.certificate_type,
+    contestName: r.contest_name,
+    season: r.season,
+    position: r.position,
+    issuedDate: r.issued_date,
+    cloudinaryUrl: r.cloudinary_url,
+    cloudinaryPublicId: r.cloudinary_public_id,
+    status: r.status,
+    issuedBy: r.issued_by,
+    templateId: r.template_id,
+    createdAt: r.created_at,
+    verificationCode: r.verification_code,
+  };
+}
+
+export function rowToAnnouncement(r: any): Announcement & { id: string } {
+  return { id: r.id, title: r.title, body: r.body, category: r.category, createdBy: r.created_by, createdAt: r.created_at };
+}
+
+export function rowToSponsor(r: any): Sponsor {
+  return { id: r.id, name: r.name, tier: r.tier, logoURL: r.logo_url, websiteURL: r.website_url, isActive: r.is_active };
+}
+
+// ── Participants ──────────────────────────────────────────────────────────────
+
+export async function getParticipantByUid(uid: string): Promise<Participant | null> {
+  const { data, error } = await supabase.from('participants').select('*').eq('uid', uid).single();
+  if (error || !data) return null;
+  return rowToParticipant(data);
+}
+
+export async function getParticipants(limit = 200): Promise<Participant[]> {
+  const { data } = await supabase.from('participants').select('*').order('rating', { ascending: false }).limit(limit);
+  return (data ?? []).map(rowToParticipant);
+}
+
+export async function getFoundingMembers(): Promise<Participant[]> {
+  const { data } = await supabase.from('participants').select('*').eq('founding_member', true).order('founding_rank', { ascending: true });
+  return (data ?? []).map(rowToParticipant);
+}
+
+export async function upsertParticipant(p: Partial<Participant> & { uid: string }): Promise<void> {
+  const row: any = { uid: p.uid };
+  if (p.participantId      !== undefined) row.participant_id        = p.participantId;
+  if (p.fullName           !== undefined) row.full_name             = p.fullName;
+  if (p.email              !== undefined) row.email                 = p.email;
+  if (p.phone              !== undefined) row.phone                 = p.phone;
+  if (p.college            !== undefined) row.college               = p.college;
+  if (p.university         !== undefined) row.university            = p.university;
+  if (p.year               !== undefined) row.year                  = p.year;
+  if (p.branch             !== undefined) row.branch                = p.branch;
+  if (p.city               !== undefined) row.city                  = p.city;
+  if (p.state              !== undefined) row.state                 = p.state;
+  if (p.codeforcesHandle   !== undefined) row.codeforces_handle     = p.codeforcesHandle;
+  if (p.leetcodeUsername   !== undefined) row.leetcode_username     = p.leetcodeUsername;
+  if (p.codechefUsername   !== undefined) row.codechef_username     = p.codechefUsername;
+  if (p.hackerrankUsername !== undefined) row.hackerrank_username   = p.hackerrankUsername;
+  if (p.gfgUsername        !== undefined) row.gfg_username          = p.gfgUsername;
+  if ((p as any).hackerrankUrl  !== undefined) row.hackerrank_url   = (p as any).hackerrankUrl;
+  if ((p as any).codechefUrl    !== undefined) row.codechef_url     = (p as any).codechefUrl;
+  if ((p as any).leetcodeUrl    !== undefined) row.leetcode_url     = (p as any).leetcodeUrl;
+  if ((p as any).codeforcesUrl  !== undefined) row.codeforces_url   = (p as any).codeforcesUrl;
+  if ((p as any).gfgUrl         !== undefined) row.gfg_url          = (p as any).gfgUrl;
+  if (p.github             !== undefined) row.github                = p.github;
+  if (p.linkedin           !== undefined) row.linkedin              = p.linkedin;
+  if (p.photoURL           !== undefined) row.photo_url             = p.photoURL;
+  if (p.bio                !== undefined) row.bio                   = p.bio;
+  if (p.rating             !== undefined) row.rating                = p.rating;
+  if (p.peakRating         !== undefined) row.peak_rating           = p.peakRating;
+  if (p.peakTitle          !== undefined) row.peak_title            = p.peakTitle;
+  if (p.streak             !== undefined) row.streak                = p.streak;
+  if (p.lastContestDate    !== undefined) row.last_contest_date     = p.lastContestDate;
+  if (p.ratingHistory      !== undefined) row.rating_history        = p.ratingHistory;
+  if (p.tier               !== undefined) row.tier                  = p.tier;
+  if (p.role               !== undefined) row.role                  = p.role;
+  if (p.badges             !== undefined) row.badges                = p.badges;
+  if (p.contestsParticipated !== undefined) row.contests_participated = p.contestsParticipated;
+  if (p.attendance         !== undefined) row.attendance            = p.attendance;
+  if (p.monthlyPoints      !== undefined) row.monthly_points        = p.monthlyPoints;
+  if (p.createdAt          !== undefined) row.created_at            = p.createdAt;
+  if (p.emailVerified      !== undefined) row.email_verified        = p.emailVerified;
+  if (p.foundingMember     !== undefined) row.founding_member       = p.foundingMember;
+  if (p.foundingRank       !== undefined) row.founding_rank         = p.foundingRank;
+  if (p.foundingAwardedAt  !== undefined) row.founding_awarded_at   = p.foundingAwardedAt;
+  if (p.foundingSeasonId   !== undefined) row.founding_season_id    = p.foundingSeasonId;
+  await supabase.from('participants').upsert(row, { onConflict: 'uid' });
+}
+
+export async function updateParticipant(uid: string, updates: Record<string, any>): Promise<void> {
+  await supabase.from('participants').update(updates).eq('uid', uid);
+}
+
+// ── Contests ──────────────────────────────────────────────────────────────────
+
+export async function getContests(): Promise<Contest[]> {
+  const { data } = await supabase.from('contests').select('*').order('date', { ascending: true });
+  return (data ?? []).map(rowToContest);
+}
+
+export async function getContestById(id: string): Promise<Contest | null> {
+  const { data } = await supabase.from('contests').select('*').eq('id', id).single();
+  return data ? rowToContest(data) : null;
+}
+
+export async function insertContest(c: Omit<Contest, 'id'> & { id?: string }): Promise<string> {
+  const row: any = {
+    contest_number: c.contestNumber, name: c.name, week_number: c.weekNumber,
+    mode: c.mode, date: c.date, start_time: c.startTime, end_time: c.endTime,
+    duration: c.duration, platform: c.platform ?? null, contest_link: c.contestLink ?? null,
+    venue: c.venue ?? null, problem_setter: c.problemSetter ?? null,
+    instructions: c.instructions ?? null, status: c.status, season_id: c.seasonId,
+    difficulty: c.difficulty ?? 'Easy', created_at: new Date().toISOString(),
+  };
+  if (c.id) row.id = c.id;
+  const { data } = await supabase.from('contests').insert(row).select('id').single();
+  return data?.id ?? '';
+}
+
+export async function updateContest(id: string, updates: Partial<Contest>): Promise<void> {
+  const row: any = {};
+  if (updates.name        !== undefined) row.name          = updates.name;
+  if (updates.status      !== undefined) row.status        = updates.status;
+  if (updates.contestLink !== undefined) row.contest_link  = updates.contestLink;
+  if (updates.platform    !== undefined) row.platform      = updates.platform;
+  if (updates.venue       !== undefined) row.venue         = updates.venue;
+  if (updates.startTime   !== undefined) row.start_time    = updates.startTime;
+  if (updates.endTime     !== undefined) row.end_time      = updates.endTime;
+  if (updates.duration    !== undefined) row.duration      = updates.duration;
+  if (updates.date        !== undefined) row.date          = updates.date;
+  if (updates.weekNumber  !== undefined) row.week_number   = updates.weekNumber;
+  if (updates.mode        !== undefined) row.mode          = updates.mode;
+  if (updates.difficulty  !== undefined) row.difficulty    = updates.difficulty;
+  if (updates.problemSetter !== undefined) row.problem_setter = updates.problemSetter;
+  if (updates.instructions  !== undefined) row.instructions  = updates.instructions;
+  if ((updates as any).ratingCalculated !== undefined) row.rating_calculated = (updates as any).ratingCalculated;
+  if ((updates as any).resultsPublished !== undefined) row.results_published = (updates as any).resultsPublished;
+  if ((updates as any).lockedAt         !== undefined) row.locked_at         = (updates as any).lockedAt;
+  await supabase.from('contests').update(row).eq('id', id);
+}
+
+export async function deleteContest(id: string): Promise<void> {
+  await supabase.from('contests').delete().eq('id', id);
+}
+
+// ── Contest Results ───────────────────────────────────────────────────────────
+
+export async function getResultsByParticipant(participantId: string): Promise<ContestResult[]> {
+  const { data } = await supabase.from('contest_results').select('*').eq('participant_id', participantId).order('imported_at', { ascending: false });
+  return (data ?? []).map(rowToResult);
+}
+
+export async function getAllResults(): Promise<ContestResult[]> {
+  const { data } = await supabase.from('contest_results').select('*');
+  return (data ?? []).map(rowToResult);
+}
+
+export async function insertResult(r: Omit<ContestResult, 'id'> & { id?: string; importedAt?: string }): Promise<void> {
+  const row: any = {
+    contest_id: r.contestId, contest_name: (r as any).contestName ?? null,
+    participant_id: r.participantId, participant_name: r.participantName,
+    college: r.college, rank: r.rank, score: r.score, penalty: r.penalty,
+    problems_solved: r.problemsSolved, league_points: r.leaguePoints,
+    rating_before: r.ratingBefore, rating_after: r.ratingAfter,
+    rating_change: r.ratingChange ?? null,
+    imported_at: r.importedAt ?? new Date().toISOString(),
+  };
+  if (r.id) row.id = r.id;
+  await supabase.from('contest_results').insert(row);
+}
+
+// ── Certificates ──────────────────────────────────────────────────────────────
+
+export async function getCertificates(): Promise<Certificate[]> {
+  const { data } = await supabase.from('certificates').select('*').order('created_at', { ascending: false });
+  return (data ?? []).map(rowToCertificate);
+}
+
+export async function getCertificatesByParticipant(participantId: string): Promise<Certificate[]> {
+  const { data } = await supabase.from('certificates').select('*').eq('participant_id', participantId);
+  return (data ?? []).map(rowToCertificate);
+}
+
+export async function getCertificateByCode(code: string): Promise<Certificate | null> {
+  const { data: d1 } = await supabase.from('certificates').select('*').eq('certificate_id', code).maybeSingle();
+  if (d1) return rowToCertificate(d1);
+  const { data: d2 } = await supabase.from('certificates').select('*').eq('verification_code', code).maybeSingle();
+  if (d2) return rowToCertificate(d2);
+  const { data: d3 } = await supabase.from('certificates').select('*').eq('id', code).maybeSingle();
+  return d3 ? rowToCertificate(d3) : null;
+}
+
+export async function upsertCertificate(c: Partial<Certificate> & { id: string }): Promise<void> {
+  const row: any = {
+    id: c.id,
+    certificate_id: c.certificateId ?? null,
+    participant_id: c.participantId ?? null,
+    participant_name: c.participantName ?? null,
+    email: c.email ?? null,
+    certificate_type: c.certificateType ?? null,
+    contest_name: c.contestName ?? null,
+    season: c.season ?? null,
+    position: c.position ?? null,
+    issued_date: c.issuedDate ?? null,
+    cloudinary_url: c.cloudinaryUrl ?? null,
+    cloudinary_public_id: c.cloudinaryPublicId ?? null,
+    status: c.status ?? 'Issued',
+    issued_by: c.issuedBy ?? null,
+    template_id: c.templateId ?? null,
+    created_at: c.createdAt ?? new Date().toISOString(),
+    verification_code: c.verificationCode ?? null,
+  };
+  await supabase.from('certificates').upsert(row, { onConflict: 'id' });
+}
+
+export async function deleteCertificate(id: string): Promise<void> {
+  await supabase.from('certificates').delete().eq('id', id);
+}
+
+// ── Announcements ─────────────────────────────────────────────────────────────
+
+export async function getAnnouncements(limit = 20): Promise<(Announcement & { id: string })[]> {
+  const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(limit);
+  return (data ?? []).map(rowToAnnouncement);
+}
+
+export async function insertAnnouncement(a: Omit<Announcement, 'id'>): Promise<string> {
+  const { data } = await supabase.from('announcements').insert({
+    title: a.title, body: a.body, category: a.category,
+    created_by: a.createdBy, created_at: new Date().toISOString(),
+  }).select('id').single();
+  return data?.id ?? '';
+}
+
+export async function deleteAnnouncement(id: string): Promise<void> {
+  await supabase.from('announcements').delete().eq('id', id);
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export async function getSetting(key: string): Promise<any> {
+  const { data } = await supabase.from('settings').select('data').eq('key', key).maybeSingle();
+  return data?.data ?? null;
+}
+
+export async function setSetting(key: string, value: Record<string, any>): Promise<void> {
+  await supabase.from('settings').upsert({ key, data: value }, { onConflict: 'key' });
+}
+
+// ── Counters ──────────────────────────────────────────────────────────────────
+
+export async function getCounter(id: string): Promise<number> {
+  const { data } = await supabase.from('counters').select('value').eq('id', id).maybeSingle();
+  return data?.value ?? 0;
+}
+
+export async function incrementCounter(id: string): Promise<number> {
+  // Read-then-write (Supabase free tier has no stored procedures needed for atomicity at low scale)
+  const { data: current } = await supabase.from('counters').select('value').eq('id', id).maybeSingle();
+  const next = (current?.value ?? 0) + 1;
+  await supabase.from('counters').upsert({ id, value: next }, { onConflict: 'id' });
+  return next;
+}
+
+export async function setCounter(id: string, value: number): Promise<void> {
+  await supabase.from('counters').upsert({ id, value }, { onConflict: 'id' });
+}
+
+// ── Sponsors ──────────────────────────────────────────────────────────────────
+
+export async function getSponsors(): Promise<Sponsor[]> {
+  const { data } = await supabase.from('sponsors').select('*').eq('is_active', true);
+  return (data ?? []).map(rowToSponsor);
+}
+
+export async function getAllSponsors(): Promise<Sponsor[]> {
+  const { data } = await supabase.from('sponsors').select('*');
+  return (data ?? []).map(rowToSponsor);
+}
+
+export async function upsertSponsor(s: Partial<Sponsor> & { id?: string }): Promise<void> {
+  const row: any = {
+    name: s.name, tier: s.tier, logo_url: s.logoURL,
+    website_url: s.websiteURL, is_active: s.isActive ?? true,
+  };
+  if (s.id) row.id = s.id;
+  await supabase.from('sponsors').upsert(row, { onConflict: 'id' });
+}
+
+export async function updateSponsor(id: string, updates: Partial<Sponsor>): Promise<void> {
+  const row: any = {};
+  if (updates.name       !== undefined) row.name        = updates.name;
+  if (updates.tier       !== undefined) row.tier        = updates.tier;
+  if (updates.logoURL    !== undefined) row.logo_url    = updates.logoURL;
+  if (updates.websiteURL !== undefined) row.website_url = updates.websiteURL;
+  if (updates.isActive   !== undefined) row.is_active   = updates.isActive;
+  await supabase.from('sponsors').update(row).eq('id', id);
+}

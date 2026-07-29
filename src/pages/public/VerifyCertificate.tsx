@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import type { Certificate } from '../../types';
+import { getCertificateByCode } from '../../lib/db';
 import {
   ShieldCheck, AlertCircle, Search, Download,
   CheckCircle2, ArrowLeft
@@ -26,38 +25,8 @@ export default function VerifyCertificate() {
 
     try {
       const cleanId = idToSearch.trim();
-
-      // 1. Search by certificateId field
-      const q = query(
-        collection(db, 'certificates'),
-        where('certificateId', '==', cleanId)
-      );
-      let snap = await getDocs(q);
-
-      if (!snap.empty) {
-        setCert({ id: snap.docs[0].id, ...snap.docs[0].data() } as Certificate);
-        setLoading(false);
-        return;
-      }
-
-      // 2. Search by legacy verificationCode
-      const qLegacy = query(
-        collection(db, 'certificates'),
-        where('verificationCode', '==', cleanId)
-      );
-      snap = await getDocs(qLegacy);
-
-      if (!snap.empty) {
-        setCert({ id: snap.docs[0].id, ...snap.docs[0].data() } as Certificate);
-        setLoading(false);
-        return;
-      }
-
-      // 3. Search by doc ID directly
-      const docSnap = await getDoc(doc(db, 'certificates', cleanId));
-      if (docSnap.exists()) {
-        setCert({ id: docSnap.id, ...docSnap.data() } as Certificate);
-      }
+      const cert = await getCertificateByCode(cleanId);
+      if (cert) setCert(cert);
     } catch (err) {
       console.error('Verification error:', err);
     } finally {
@@ -147,7 +116,7 @@ export default function VerifyCertificate() {
         {loading && (
           <div className="card text-center py-12 space-y-3">
             <div className="w-8 h-8 rounded-full border-2 border-neon-cyan/20 border-t-neon-cyan animate-spin mx-auto" />
-            <p className="text-xs text-text-secondary">Checking official Firestore certificate registry…</p>
+            <p className="text-xs text-text-secondary">Checking official certificate registry…</p>
           </div>
         )}
 

@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { collection, writeBatch, doc, getDocs } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import { CheckCircle, AlertTriangle, Upload, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { supabase } from '../../lib/supabase';
 
 // ─── Exact schedule from Schedule.tsx ────────────────────────────────────────
 type Mode = 'Online' | 'Offline' | 'Bonus';
@@ -93,70 +92,51 @@ export default function SeedContests() {
 
   async function checkExisting() {
     setStatus('checking');
-    const snap = await getDocs(collection(db, 'contests'));
-    setExisting(snap.size);
+    const { count } = await supabase.from('contests').select('*', { count: 'exact', head: true });
+    setExisting(count ?? 0);
     setStatus('idle');
-    if (snap.size > 0) {
-      setMessage(`⚠️ Firestore already has ${snap.size} contest docs. Seeding again will create duplicates.`);
+    if ((count ?? 0) > 0) {
+      setMessage(`⚠️ Supabase already has ${count} contest docs. Seeding again will create duplicates.`);
     } else {
-      setMessage('✅ No contests in Firestore. Ready to seed 57 contests.');
+      setMessage('✅ No contests in Supabase. Ready to seed 57 contests.');
     }
   }
 
   async function handleDeleteAll() {
-    if (!confirm(`Delete all ${existing} contests from Firestore? This cannot be undone.`)) return;
-    setStatus('deleting');
+    if (!confirm(`Delete all ${existing} contests from Supabase? This cannot be undone.`)) return;
+    setStatus('deleting' as any);
     try {
-      const snap = await getDocs(collection(db, 'contests'));
-      const chunks: typeof snap.docs[] = [];
-      for (let i = 0; i < snap.docs.length; i += 500) chunks.push(snap.docs.slice(i, i + 500));
-      for (const chunk of chunks) {
-        const batch = writeBatch(db);
-        chunk.forEach(d => batch.delete(d.ref));
-        await batch.commit();
-      }
+      await supabase.from('contests').delete().neq('id', '');
       setExisting(0);
       setStatus('idle');
-      setMessage(`✅ Deleted all ${snap.size} contests. Ready to re-seed.`);
-      toast.success(`Deleted ${snap.size} contests`);
+      setMessage(`✅ Deleted all contests. Ready to re-seed.`);
+      toast.success('All contests deleted');
     } catch (e: any) {
       setStatus('error');
       setMessage(`❌ Delete failed: ${e.message}`);
-      toast.error(e.message);
     }
   }
 
   async function handleSeed(overwrite = false) {
     setStatus('seeding');
     try {
-      // If overwrite: delete all existing first
       if (overwrite) {
-        const snap = await getDocs(collection(db, 'contests'));
-        // Delete in batches of 500
-        const chunks = [];
-        for (let i = 0; i < snap.docs.length; i += 500) chunks.push(snap.docs.slice(i, i + 500));
-        for (const chunk of chunks) {
-          const batch = writeBatch(db);
-          chunk.forEach(d => batch.delete(d.ref));
-          await batch.commit();
-        }
+        await supabase.from('contests').delete().neq('id', '');
       }
-
       const contests = buildContests();
-      // Write in batches of 500 (Firestore limit)
-      const chunks = [];
-      for (let i = 0; i < contests.length; i += 500) chunks.push(contests.slice(i, i + 500));
-      for (const chunk of chunks) {
-        const batch = writeBatch(db);
-        chunk.forEach(c => {
-          const ref = doc(collection(db, 'contests'));
-          batch.set(ref, c);
-        });
-        await batch.commit();
+      const rows = contests.map(c => ({
+        contest_number: c.contestNumber, name: c.name, week_number: c.weekNumber,
+        mode: c.mode, date: c.date, start_time: c.startTime, end_time: c.endTime,
+        duration: c.duration, platform: c.platform, contest_link: c.contestLink,
+        venue: c.venue, problem_setter: c.problemSetter, instructions: c.instructions,
+        status: c.status, season_id: c.seasonId, created_at: c.createdAt,
+      }));
+      // Insert in chunks of 100
+      for (let i = 0; i < rows.length; i += 100) {
+        await supabase.from('contests').insert(rows.slice(i, i + 100));
       }
-
       setStatus('done');
-      setMessage(`✅ Successfully seeded ${contests.length} contests to Firestore!`);
+      setMessage(`✅ Successfully seeded ${contests.length} contests to Supabase!`);
       toast.success(`${contests.length} contests seeded!`);
     } catch (e: any) {
       setStatus('error');

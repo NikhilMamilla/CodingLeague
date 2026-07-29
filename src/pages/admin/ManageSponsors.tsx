@@ -1,12 +1,8 @@
 import { useEffect, useState } from 'react';
-import {
-  collection, query, orderBy, onSnapshot,
-  addDoc, updateDoc, doc, serverTimestamp,
-} from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import type { Sponsor, SponsorTier } from '../../types';
 import { Handshake, Plus, ToggleLeft, ToggleRight, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getAllSponsors, upsertSponsor, updateSponsor } from '../../lib/db';
 
 const TIERS: SponsorTier[] = ['Gold', 'Silver', 'Bronze'];
 
@@ -26,43 +22,29 @@ export default function ManageSponsors() {
   const [saving,    setSaving]    = useState(false);
 
   useEffect(() => {
-    const q = query(collection(db, 'sponsors'), orderBy('tier'));
-    const unsub = onSnapshot(q, snap => {
-      setSponsors(snap.docs.map(d => ({ id: d.id, ...d.data() } as Sponsor)));
-      setLoading(false);
-    }, () => { setLoading(false); });
-    return () => unsub();
+    getAllSponsors().then(list => { setSponsors(list); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
   function set(field: string, value: string) { setForm(f => ({ ...f, [field]: value })); }
 
   async function handleCreate() {
-    if (!form.name || !form.logoURL || !form.websiteURL) {
-      toast.error('Name, logo URL, and website URL are required'); return;
-    }
+    if (!form.name || !form.logoURL || !form.websiteURL) { toast.error('Name, logo URL, and website URL are required'); return; }
     setSaving(true);
     try {
-      await addDoc(collection(db, 'sponsors'), {
-        name:       form.name,
-        tier:       form.tier,
-        logoURL:    form.logoURL,
-        websiteURL: form.websiteURL,
-        isActive:   true,
-        createdAt:  serverTimestamp(),
-      });
+      await upsertSponsor({ name: form.name, tier: form.tier, logoURL: form.logoURL, websiteURL: form.websiteURL, isActive: true });
+      const list = await getAllSponsors();
+      setSponsors(list);
       toast.success('Sponsor added!');
-      setForm(EMPTY);
-      setShowForm(false);
-      // onSnapshot handles the list update automatically
+      setForm(EMPTY); setShowForm(false);
     } catch (e: any) { toast.error(e.message); }
     finally { setSaving(false); }
   }
 
   async function toggleActive(s: Sponsor) {
     try {
-      await updateDoc(doc(db, 'sponsors', s.id), { isActive: !s.isActive });
+      await updateSponsor(s.id, { isActive: !s.isActive });
+      setSponsors(prev => prev.map(sp => sp.id === s.id ? { ...sp, isActive: !s.isActive } : sp));
       toast.success(s.isActive ? 'Sponsor deactivated' : 'Sponsor activated');
-      // onSnapshot will update the list automatically
     } catch (e: any) { toast.error(e.message); }
   }
 

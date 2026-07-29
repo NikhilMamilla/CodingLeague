@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import type { Announcement, AnnouncementCategory } from '../../types';
 import { Megaphone, ChevronDown, ChevronUp } from 'lucide-react';
+import { getAnnouncements } from '../../lib/db';
 
 const CAT_COLOR: Record<AnnouncementCategory, string> = {
   Workshop:    'bg-electric-blue/10 text-electric-blue border-electric-blue/30',
@@ -64,12 +63,7 @@ export default function Announcements() {
   const [filter,        setFilter]        = useState<AnnouncementCategory | 'All'>('All');
 
   useEffect(() => {
-    const q = query(collection(db, 'announcements'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, snap => {
-      setAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() } as Row)));
-      setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
+    getAnnouncements(100).then(list => { setAnnouncements(list); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
   const categories: AnnouncementCategory[] = ['Workshop', 'Hackathon', 'Contest', 'Results', 'Recruitment', 'Sponsors'];

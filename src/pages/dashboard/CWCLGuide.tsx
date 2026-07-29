@@ -4,13 +4,11 @@ import {
   CheckCircle, ChevronDown, User, Crown,
   TrendingUp, HelpCircle, Mail
 } from 'lucide-react';
-import { collection, query, orderBy, limit, onSnapshot, where } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import CBBLogo from '../../components/ui/CBBLogo';
 import { TIER_CONFIG } from '../../lib/ratingEngine';
-import type { ContestResult } from '../../types';
 import { TIER_THRESHOLDS } from '../../types';
+import { getParticipants, getResultsByParticipant } from '../../lib/db';
 
 // ─── FAQ Items ──────────────────────────────────────────────────────────────
 const GUIDE_FAQS = [
@@ -51,53 +49,21 @@ export default function CWCLGuide() {
   const [bestFinish, setBestFinish] = useState<number | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
-  // Real-time Overall & College Rank calculation
   useEffect(() => {
     if (!participant) return;
-
-    // Listen to overall leaderboard for rank
-    const qOverall = query(
-      collection(db, 'participants'),
-      orderBy('rating', 'desc'),
-      limit(500)
-    );
-    const unsubOverall = onSnapshot(qOverall, (snap) => {
-      const all = snap.docs
-        .map((d) => ({ uid: d.id, ...d.data() } as any))
-        .filter((p) => p.role !== 'admin' && p.role !== 'super_admin');
-
-      const idx = all.findIndex((p) => p.uid === participant.uid);
+    getParticipants(500).then(all => {
+      const nonAdmin = all.filter(p => p.role !== 'admin' && p.role !== 'super_admin');
+      const idx = nonAdmin.findIndex(p => p.uid === participant.uid);
       setOverallRank(idx !== -1 ? idx + 1 : null);
-
-      // College rank
-      const collegeAll = all.filter(
-        (p) => p.college?.toLowerCase() === participant.college?.toLowerCase()
-      );
-      const colIdx = collegeAll.findIndex((p) => p.uid === participant.uid);
+      const college = nonAdmin.filter(p => p.college?.toLowerCase() === participant.college?.toLowerCase());
+      const colIdx = college.findIndex(p => p.uid === participant.uid);
       setCollegeRank(colIdx !== -1 ? colIdx + 1 : null);
-    });
-
-    // Listen to user results for best finish (client-side min rank calc, no composite index needed)
-    const qResults = query(
-      collection(db, 'contestResults'),
-      where('participantId', '==', participant.participantId),
-      limit(100)
-    );
-    const unsubResults = onSnapshot(qResults, (snap) => {
-      const resList = snap.docs.map((d) => d.data() as ContestResult);
-      if (resList.length > 0) {
-        const ranks = resList.map((r) => r.rank).filter((rk) => typeof rk === 'number' && rk > 0);
-        if (ranks.length > 0) {
-          setBestFinish(Math.min(...ranks));
-        }
-      }
-    });
-
-    return () => {
-      unsubOverall();
-      unsubResults();
-    };
-  }, [participant]);
+    }).catch(() => {});
+    getResultsByParticipant(participant.participantId).then(resList => {
+      const ranks = resList.map(r => r.rank).filter(rk => typeof rk === 'number' && rk > 0);
+      if (ranks.length > 0) setBestFinish(Math.min(...ranks));
+    }).catch(() => {});
+  }, [participant?.uid]);
 
   // Calculate Next Title Threshold
   const rating = participant?.rating ?? 800;

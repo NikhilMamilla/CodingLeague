@@ -2,14 +2,14 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronRight, Eye, EyeOff, ArrowLeft, Code2, ExternalLink, CheckCircle2, XCircle, Loader2, Send, Crown } from 'lucide-react';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc, addDoc, serverTimestamp, collection, query, where, orderBy, limit, getDocs, getDoc, runTransaction } from 'firebase/firestore';
-import { auth, db } from '../../lib/firebase';
+import { auth } from '../../lib/firebase';
 import { getTierFromRating } from '../../types';
 import CBBLogo from '../../components/ui/CBBLogo';
 import FoundingMemberBadge from '../../components/ui/FoundingMemberBadge';
 import { reserveFoundingRank, type FoundingReservation } from '../../lib/foundingMembers';
 import toast from 'react-hot-toast';
 import { extractHandle, verifyPlatformProfile, type VerificationResult } from '../../lib/profileVerification';
+import { upsertParticipant, incrementCounter, getSetting, insertAnnouncement } from '../../lib/db';
 
 type Step = 1 | 2 | 3;
 
@@ -81,63 +81,8 @@ const PLATFORMS = [
 ] as const;
 
 async function generateParticipantId(): Promise<string> {
-  const counterRef = doc(db, 'counters', 'participantId');
-
-  // Atomically increment the counter. The transaction handles first-run
-  // (counter doc missing) by seeding from existing participants, with
-  // exponential backoff on 429 / transient errors.
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (attempt > 0) {
-      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-    }
-
-    try {
-      const newValue = await runTransaction(db, async (transaction) => {
-        const snap = await transaction.get(counterRef);
-
-        let current: number;
-        if (snap.exists()) {
-          current = snap.data().value ?? 0;
-        } else {
-          // Counter doesn't exist yet — seed from highest existing participantId.
-          // We can't use getDocs inside a transaction, so we use 0 as a safe seed
-          // and let the duplicate-check loop below handle any collisions.
-          current = 0;
-        }
-
-        const next = current + 1;
-        transaction.set(counterRef, { value: next });
-        return next;
-      });
-
-      const candidateId = 'CBB' + String(newValue).padStart(6, '0');
-
-      // Verify the ID isn't already taken (handles seed = 0 edge case)
-      const existing = await getDocs(
-        query(collection(db, 'participants'), where('participantId', '==', candidateId), limit(1))
-      );
-      if (existing.empty) return candidateId;
-
-      // ID taken — counter is out of sync. Fast-forward it by reading highest existing ID
-      try {
-        const highest = await getDocs(
-          query(collection(db, 'participants'), orderBy('participantId', 'desc'), limit(1))
-        );
-        if (!highest.empty) {
-          const last = highest.docs[0].data().participantId as string;
-          if (last?.startsWith('CBB')) {
-            const num = parseInt(last.replace('CBB', ''), 10);
-            if (!isNaN(num)) await setDoc(counterRef, { value: num });
-          }
-        }
-      } catch { /* ignore resync errors, next attempt will retry */ }
-
-    } catch (err: any) {
-      if (attempt === 2) throw err;
-    }
-  }
-
-  throw new Error('Unable to generate unique participant ID. Please try again.');
+  const next = await incrementCounter('participantId');
+  return 'CBB' + String(next).padStart(6, '0');
 }
 
 function StepDot({ n, current }: { n: number; current: number }) {
@@ -311,32 +256,29 @@ export default function Register() {
         participantDoc.badges = [];
       }
 
-      await setDoc(doc(db, 'participants', cred.user.uid), participantDoc);
+      await upsertParticipant({ uid: cred.user.uid, ...participantDoc });
       toast.success(`Welcome ${form.fullName}! Your ID: ${participantId}`);
 
       // Create notification announcement for founding members
       if (foundingReservation) {
         try {
-          await addDoc(collection(db, 'announcements'), {
+          await insertAnnouncement({
             title: 'Founding Member Awarded',
             body: `Congratulations! You are among the first registered participants of CWCL and have received Founding Member recognition for season ${foundingReservation.seasonId}.`,
             category: 'Results',
             createdBy: 'System',
-            createdAt: serverTimestamp(),
+            createdAt: new Date().toISOString(),
           });
-        } catch { /* ignore announcement failure */ }
+        } catch { /* ignore */ }
         setFoundingData(foundingReservation);
         setShowFoundingModal(true);
         return;
       }
 
-      // Fetch WhatsApp announcement link and show success modal
+      // Fetch WhatsApp link and show success modal
       try {
-        const commSnap = await getDoc(doc(db, 'settings', 'community'));
-        if (commSnap.exists()) {
-          const link = commSnap.data().announcementWhatsapp;
-          if (link) setWhatsappLink(link);
-        }
+        const commData = await getSetting('community');
+        if (commData?.announcementWhatsapp) setWhatsappLink(commData.announcementWhatsapp);
       } catch { /* ignore */ }
       setShowSuccessModal(true);
     } catch (err: any) {

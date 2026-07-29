@@ -6,17 +6,13 @@ import {
   Megaphone, Crown, Info, Users, X, Send,
   Sparkles, Download,
 } from 'lucide-react';
-import {
-  collection, query, where, orderBy, limit,
-  onSnapshot, doc, getDoc, getDocs,
-} from 'firebase/firestore';
 import { downloadFoundingCertificate } from '../../lib/certificateGenerator';
-import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Contest, ContestResult, Announcement } from '../../types';
 import { BADGE_META } from '../../types';
 import toast from 'react-hot-toast';
-import { cachedFetch } from '../../lib/cache';
+import { getContests, getParticipants, getAnnouncements, getSetting, getResultsByParticipant } from '../../lib/db';
+import { supabase } from '../../lib/supabase';
 
 const TIER_CFG: Record<string, { cls: string; next: number; min: number; nextName: string }> = {
   Beginner:               { cls: 'text-gray-400 font-semibold',    next: 900,   min: 800,  nextName: 'Explorer'              },
@@ -127,90 +123,53 @@ export default function Dashboard() {
   const [foundingSlots, setFoundingSlots] = useState<FoundingSlotState>({ enabled: false, claimed: 0, max: 20, seasonLabel: '2026–27' });
 
   useEffect(() => {
-    const unsubs: (() => void)[] = [];
-
-    // ── Real-time: active/upcoming contest (small, needs to be live) ──
-    unsubs.push(onSnapshot(
-      query(collection(db, 'contests'), where('status', '==', 'Active'), limit(1)),
-      s => {
-        setActiveContest(s.empty ? null : { id: s.docs[0].id, ...s.docs[0].data() } as Contest);
-        setLoadingContest(false);
-      }
-    ));
-    unsubs.push(onSnapshot(
-      query(collection(db, 'contests'), where('status', '==', 'Upcoming'), orderBy('date', 'asc'), limit(1)),
-      s => {
-        setUpcomingContest(s.empty ? null : { id: s.docs[0].id, ...s.docs[0].data() } as Contest);
-        setLoadingContest(false);
-      }
-    ));
-
-    // ── Cached: leaderboard top-200 (5-min TTL, shared with leaderboard page) ──
-    cachedFetch('leaderboard:participants', async () => {
-      const snap = await getDocs(
-        query(collection(db, 'participants'), orderBy('rating', 'desc'), limit(200))
+    // Contests — filter client-side
+    getContests().then(all => {
+      setActiveContest(all.find(c => c.status === 'Active') ?? null);
+      setUpcomingContest(
+        all.filter(c => c.status === 'Upcoming').sort((a, b) => a.date.localeCompare(b.date))[0] ?? null
       );
-      return snap.docs
-        .map(d => ({ uid: d.id, ...d.data() } as LeaderRow & { role?: string }))
-        .filter(r => r.role !== 'admin' && r.role !== 'super_admin');
-    }).then(allRows => {
-      const rows = allRows.slice(0, 10) as LeaderRow[];
-      rows.forEach(r => { r.foundingMember = !!(r as any).foundingMember; });
-      setLeaderboard(rows);
+      setLoadingContest(false);
+    }).catch(() => setLoadingContest(false));
+
+    // Leaderboard
+    getParticipants(200).then(all => {
+      const filtered = all.filter(r => r.role !== 'admin' && r.role !== 'super_admin');
+      setLeaderboard(filtered.slice(0, 10) as LeaderRow[]);
       if (participant) {
-        const idx = (allRows as LeaderRow[]).findIndex(r => r.uid === participant.uid);
+        const idx = filtered.findIndex(r => r.uid === participant.uid);
         setMyRank(idx !== -1 ? idx + 1 : null);
       }
       setLoadingLeader(false);
     }).catch(() => setLoadingLeader(false));
 
-    // ── Real-time: announcements (admin posts these, must be live) ──
-    unsubs.push(onSnapshot(
-      query(collection(db, 'announcements'), orderBy('createdAt', 'desc'), limit(4)),
-      s => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() } as AnnouncementRow)))
-    ));
+    // Announcements
+    getAnnouncements(4).then(list => setAnnouncements(list as AnnouncementRow[])).catch(() => {});
 
-    // ── Cached: community WhatsApp link ──
-    cachedFetch('settings:community', async () => {
-      const snap = await getDoc(doc(db, 'settings', 'community'));
-      return snap.exists() ? snap.data() : null;
-    }).then(data => {
+    // Community WhatsApp link
+    getSetting('community').then(data => {
       if (data?.announcementWhatsapp) setAnnouncementWhatsapp(data.announcementWhatsapp);
     }).catch(() => {});
 
-    // ── Cached: founding member settings + count ──
-    cachedFetch('settings:foundingMembers', async () => {
-      const [settingsSnap, countSnap] = await Promise.all([
-        getDoc(doc(db, 'settings', 'foundingMembers')),
-        getDocs(query(collection(db, 'participants'), where('foundingMember', '==', true))),
-      ]);
-      return {
-        settings: settingsSnap.exists() ? settingsSnap.data() : null,
-        count: countSnap.size,
-      };
-    }).then(({ settings, count }) => {
+    // Founding settings + count
+    Promise.all([
+      getSetting('foundingMembers'),
+      supabase.from('participants').select('*', { count: 'exact', head: true }).eq('founding_member', true),
+    ]).then(([settings, { count }]) => {
       setFoundingSlots(prev => ({
         enabled: settings?.enabled === true,
-        claimed: count,
+        claimed: count ?? 0,
         max: Number(settings?.maxFoundingMembers) || prev.max,
         seasonLabel: settings?.seasonLabel || prev.seasonLabel,
       }));
     }).catch(() => {});
 
-    // ── Real-time: user's own recent results ──
-    if (participant) {
-      unsubs.push(onSnapshot(
-        query(
-          collection(db, 'contestResults'),
-          where('participantId', '==', participant.participantId),
-          orderBy('contestId', 'desc'),
-          limit(5)
-        ),
-        s => setRecentResults(s.docs.map(d => d.data() as ContestResult))
-      ));
+    // User's own recent results
+    if (participant?.participantId) {
+      getResultsByParticipant(participant.participantId)
+        .then(r => setRecentResults(r.slice(0, 5)))
+        .catch(() => {});
     }
-
-    return () => unsubs.forEach(u => u());
   }, [participant?.uid]);
 
   if (!participant) return (
