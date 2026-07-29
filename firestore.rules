@@ -79,16 +79,14 @@ service cloud.firestore {
       // Creating the counter seeds it from the current real-world count.
       // This lets registration start at the correct rank when existing members
       // already have founding status (e.g. 23 present → counter seeded to 23).
+      // Note: the foundingMembersMax() guard is skipped here because if the
+      // settings doc doesn't exist yet it returns 0, blocking valid seeds.
       allow create: if isSignedIn()
         && counterId in ['participantId', 'foundingMembers']
         && request.resource.data.keys().hasOnly(['value'])
         && request.resource.data.value is number
         && request.resource.data.value >= 0
-        && (
-          counterId == 'participantId'
-            ? request.resource.data.value <= 999999
-            : request.resource.data.value <= foundingMembersMax()
-        );
+        && request.resource.data.value <= 999999;
 
       // After creation, the counter may only advance by exactly 1.
       allow update: if isSignedIn()
@@ -97,15 +95,15 @@ service cloud.firestore {
         && request.resource.data.value is number
         && request.resource.data.value == resource.data.value + 1;
 
-      // Admins may reset the counter (e.g. when reassigning founding slots).
+      // Admins may reset or reseed the counter (e.g. when reassigning founding slots).
       allow delete: if isAdmin();
+      allow update: if isAdmin();
     }
 
     // ── Certificates ──────────────────────────────────────────────────────────
     match /certificates/{certId} {
-      allow read: if isSignedIn()
-        && (resource.data.email == request.auth.token.email
-            || isAdmin());
+      // Public verification page must be accessible without authentication.
+      allow read: if true;
       allow create, update, delete: if isAdmin();
     }
 
