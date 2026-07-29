@@ -258,6 +258,8 @@ export default function Register() {
 
       await upsertParticipant({ uid: cred.user.uid, ...participantDoc });
       toast.success(`Welcome ${form.fullName}! Your ID: ${participantId}`);
+      // Small delay to allow AuthContext to refetch the new participant row
+      await new Promise(r => setTimeout(r, 500));
 
       // Create notification announcement for founding members
       if (foundingReservation) {
@@ -282,6 +284,14 @@ export default function Register() {
       } catch { /* ignore */ }
       setShowSuccessModal(true);
     } catch (err: any) {
+      // If Supabase profile write failed after Firebase account was created, delete the orphaned auth account
+      if (err.message && !(err.message.includes('email') || err.message.includes('password'))) {
+        try {
+          const { getAuth } = await import('firebase/auth');
+          const currentUser = getAuth().currentUser;
+          if (currentUser) await currentUser.delete();
+        } catch { /* ignore cleanup errors */ }
+      }
       toast.error(err.message ?? 'Registration failed');
     } finally { setLoading(false); }
   }

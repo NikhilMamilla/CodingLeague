@@ -141,12 +141,14 @@ export async function getParticipantByUid(uid: string): Promise<Participant | nu
 }
 
 export async function getParticipants(limit = 200): Promise<Participant[]> {
-  const { data } = await supabase.from('participants').select('*').order('rating', { ascending: false }).limit(limit);
+  const { data, error } = await supabase.from('participants').select('*').order('rating', { ascending: false }).limit(limit);
+  if (error) throw new Error(error.message);
   return (data ?? []).map(rowToParticipant);
 }
 
 export async function getParticipantsLatestFirst(limit = 500): Promise<Participant[]> {
-  const { data } = await supabase.from('participants').select('*').order('participant_id', { ascending: false }).limit(limit);
+  const { data, error } = await supabase.from('participants').select('*').order('participant_id', { ascending: false }).limit(limit);
+  if (error) throw new Error(error.message);
   return (data ?? []).map(rowToParticipant);
 }
 
@@ -203,17 +205,20 @@ export async function upsertParticipant(p: Partial<Participant> & { uid: string 
 }
 
 export async function deleteParticipant(uid: string): Promise<void> {
-  await supabase.from('participants').delete().eq('uid', uid);
+  const { error } = await supabase.from('participants').delete().eq('uid', uid);
+  if (error) throw new Error(error.message);
 }
 
 export async function updateParticipant(uid: string, updates: Record<string, any>): Promise<void> {
-  await supabase.from('participants').update(updates).eq('uid', uid);
+  const { error } = await supabase.from('participants').update(updates).eq('uid', uid);
+  if (error) throw new Error(error.message);
 }
 
 // ── Contests ──────────────────────────────────────────────────────────────────
 
 export async function getContests(): Promise<Contest[]> {
-  const { data } = await supabase.from('contests').select('*').order('date', { ascending: true });
+  const { data, error } = await supabase.from('contests').select('*').order('date', { ascending: true });
+  if (error) throw new Error(error.message);
   return (data ?? []).map(rowToContest);
 }
 
@@ -232,7 +237,8 @@ export async function insertContest(c: Omit<Contest, 'id'> & { id?: string }): P
     difficulty: c.difficulty ?? 'Easy', created_at: new Date().toISOString(),
   };
   if (c.id) row.id = c.id;
-  const { data } = await supabase.from('contests').insert(row).select('id').single();
+  const { data, error } = await supabase.from('contests').insert(row).select('id').single();
+  if (error) throw new Error(error.message);
   return data?.id ?? '';
 }
 
@@ -254,12 +260,14 @@ export async function updateContest(id: string, updates: Partial<Contest>): Prom
   if (updates.instructions  !== undefined) row.instructions  = updates.instructions;
   if ((updates as any).ratingCalculated !== undefined) row.rating_calculated = (updates as any).ratingCalculated;
   if ((updates as any).resultsPublished !== undefined) row.results_published = (updates as any).resultsPublished;
-  if ((updates as any).lockedAt         !== undefined) row.locked_at         = (updates as any).lockedAt;
-  await supabase.from('contests').update(row).eq('id', id);
+  if ((updates as any).lockedAt !== undefined) row.locked_at = (updates as any).lockedAt;
+  const { error } = await supabase.from('contests').update(row).eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteContest(id: string): Promise<void> {
-  await supabase.from('contests').delete().eq('id', id);
+  const { error } = await supabase.from('contests').delete().eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 // ── Contest Results ───────────────────────────────────────────────────────────
@@ -285,7 +293,8 @@ export async function insertResult(r: Omit<ContestResult, 'id'> & { id?: string;
     imported_at: r.importedAt ?? new Date().toISOString(),
   };
   if (r.id) row.id = r.id;
-  await supabase.from('contest_results').insert(row);
+  const { error } = await supabase.from('contest_results').insert(row);
+  if (error) throw new Error(error.message);
 }
 
 // ── Certificates ──────────────────────────────────────────────────────────────

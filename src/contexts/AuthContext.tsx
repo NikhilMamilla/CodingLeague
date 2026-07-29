@@ -36,17 +36,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRole(p.role);
       } catch { /* ignore bad cache */ }
     }
-    // Always fetch fresh from Supabase
-    const { data, error } = await supabase
-      .from('participants')
-      .select('*')
-      .eq('uid', uid)
-      .maybeSingle();
-    if (error || !data) { setParticipant(null); setRole(null); return; }
-    const p = rowToParticipant(data);
-    setParticipant(p);
-    setRole(p.role);
-    sessionStorage.setItem(`participant_${uid}`, JSON.stringify(p));
+    // Always fetch fresh from Supabase — retry up to 3x for new registrations
+    // where the row may not be written yet
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await new Promise(r => setTimeout(r, 800 * attempt));
+      const { data, error } = await supabase
+        .from('participants')
+        .select('*')
+        .eq('uid', uid)
+        .maybeSingle();
+      if (error) { setParticipant(null); setRole(null); return; }
+      if (data) {
+        const p = rowToParticipant(data);
+        setParticipant(p);
+        setRole(p.role);
+        sessionStorage.setItem(`participant_${uid}`, JSON.stringify(p));
+        return;
+      }
+      // data is null — row not yet written, retry
+    }
+    // After retries, participant still not found — clear state
+    setParticipant(null);
+    setRole(null);
   }
 
   useEffect(() => {
