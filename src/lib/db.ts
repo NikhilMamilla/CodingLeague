@@ -145,6 +145,11 @@ export async function getParticipants(limit = 200): Promise<Participant[]> {
   return (data ?? []).map(rowToParticipant);
 }
 
+export async function getParticipantsLatestFirst(limit = 500): Promise<Participant[]> {
+  const { data } = await supabase.from('participants').select('*').order('participant_id', { ascending: false }).limit(limit);
+  return (data ?? []).map(rowToParticipant);
+}
+
 export async function getFoundingMembers(): Promise<Participant[]> {
   const { data } = await supabase.from('participants').select('*').eq('founding_member', true).order('founding_rank', { ascending: true });
   return (data ?? []).map(rowToParticipant);

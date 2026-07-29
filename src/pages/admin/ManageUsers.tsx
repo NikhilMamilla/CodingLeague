@@ -6,7 +6,7 @@ import {
   X, Shield, ExternalLink, Link2,
 } from 'lucide-react';
 import { getCanonicalProfileUrl } from '../../lib/profileVerification';
-import { getParticipants } from '../../lib/db';
+import { getParticipantsLatestFirst } from '../../lib/db';
 
 const TIER_CLASS: Record<string, string> = {
   Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
@@ -28,8 +28,8 @@ export default function ManageUsers() {
   const [viewing, setViewing] = useState<Participant | null>(null);
 
   useEffect(() => {
-    getParticipants(500).then(data => {
-      setParticipants(data.filter(p => p.role !== 'admin'));
+    getParticipantsLatestFirst(500).then(data => {
+      setParticipants(data.filter(p => p.role !== 'admin' && p.role !== 'super_admin'));
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
