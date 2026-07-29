@@ -27,6 +27,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading,     setLoading]     = useState(true);
 
   async function fetchParticipant(uid: string) {
+    // Try cache first for instant load
+    const cached = sessionStorage.getItem(`participant_${uid}`);
+    if (cached) {
+      try {
+        const p = JSON.parse(cached) as Participant;
+        setParticipant(p);
+        setRole(p.role);
+      } catch { /* ignore bad cache */ }
+    }
+    // Always fetch fresh from Supabase
     const { data, error } = await supabase
       .from('participants')
       .select('*')
@@ -36,6 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const p = rowToParticipant(data);
     setParticipant(p);
     setRole(p.role);
+    sessionStorage.setItem(`participant_${uid}`, JSON.stringify(p));
   }
 
   useEffect(() => {
@@ -61,6 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function logout() {
+    if (user) sessionStorage.removeItem(`participant_${user.uid}`);
     await signOut(auth);
   }
 

@@ -135,7 +135,7 @@ export default function ManageUsers() {
                             await deleteParticipant(p.uid);
                             setParticipants(prev => prev.filter(x => x.uid !== p.uid));
                             toast.success(`Deleted ${p.fullName}`);
-                          } catch { toast.error('Delete failed'); }
+                          } catch (e: any) { toast.error('Delete failed: ' + (e.message ?? 'Check Supabase RLS policy')); }
                         }}
                         className="text-red-400 hover:text-red-300 transition-colors"
                         title="Delete participant"
