@@ -3,10 +3,11 @@ import type { Participant } from '../../types';
 import { BADGE_META } from '../../types';
 import {
   Search, User, GraduationCap, Mail, Phone, MapPin, Code2,
-  X, Shield, ExternalLink, Link2,
+  X, Shield, ExternalLink, Link2, Trash2,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { getCanonicalProfileUrl } from '../../lib/profileVerification';
-import { getParticipantsLatestFirst } from '../../lib/db';
+import { getParticipantsLatestFirst, deleteParticipant } from '../../lib/db';
 
 const TIER_CLASS: Record<string, string> = {
   Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
@@ -120,12 +121,28 @@ export default function ManageUsers() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={() => setViewing(p)}
-                      className="text-neon-cyan text-[10px] hover:underline"
-                    >
-                      View Profile →
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => setViewing(p)}
+                        className="text-neon-cyan text-[10px] hover:underline"
+                      >
+                        View Profile →
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`Delete ${p.fullName} (${p.participantId})? This removes them from Supabase. Also delete from Firebase Auth manually.`)) return;
+                          try {
+                            await deleteParticipant(p.uid);
+                            setParticipants(prev => prev.filter(x => x.uid !== p.uid));
+                            toast.success(`Deleted ${p.fullName}`);
+                          } catch { toast.error('Delete failed'); }
+                        }}
+                        className="text-red-400 hover:text-red-300 transition-colors"
+                        title="Delete participant"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

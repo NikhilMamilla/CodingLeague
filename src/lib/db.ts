@@ -202,6 +202,10 @@ export async function upsertParticipant(p: Partial<Participant> & { uid: string 
   await supabase.from('participants').upsert(row, { onConflict: 'uid' });
 }
 
+export async function deleteParticipant(uid: string): Promise<void> {
+  await supabase.from('participants').delete().eq('uid', uid);
+}
+
 export async function updateParticipant(uid: string, updates: Record<string, any>): Promise<void> {
   await supabase.from('participants').update(updates).eq('uid', uid);
 }
