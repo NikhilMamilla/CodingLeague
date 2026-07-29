@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
+import { cacheInvalidate } from '../../lib/cache';
 
 const EMPTY = {
   name: '', weekNumber: '', mode: 'Online' as ContestMode,
@@ -94,6 +95,7 @@ export default function ManageContests() {
         seasonId:      'cwcl-2026-27',
         createdAt:     serverTimestamp(),
       });
+      cacheInvalidate('contests:all');
       toast.success('Contest created successfully!');
       setForm(EMPTY);
       setShowCreateModal(false);
@@ -120,6 +122,7 @@ export default function ManageContests() {
         problemSetter: editingContest.problemSetter || null,
         instructions: editingContest.instructions || null,
       });
+      cacheInvalidate('contests:all');
       toast.success('Contest updated successfully!');
       setEditingContest(null);
     } catch (e: any) {
@@ -148,6 +151,7 @@ export default function ManageContests() {
     if (!confirm('Delete this contest? Cannot be undone.')) return;
     try {
       await deleteDoc(doc(db, 'contests', id));
+      cacheInvalidate('contests:all');
       toast.success('Contest deleted');
     } catch (e: any) { toast.error(e.message); }
   }

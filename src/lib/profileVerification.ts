@@ -158,7 +158,7 @@ export async function verifyPlatformProfile(
 
       case 'leetcodeUsername':
       case 'leetcode': {
-        // Try LeetCode Stats API
+        // Try LeetCode Stats API (may be blocked by CORS in production)
         try {
           const res = await fetch(`https://leetcode-stats-api.herokuapp.com/${encodeURIComponent(handle)}`);
           if (res.ok) {
@@ -185,7 +185,7 @@ export async function verifyPlatformProfile(
             }
           }
         } catch {
-          // Backup API check if heroku app has latency
+          // CORS blocked — fall through to format validation
         }
 
         // Second API attempt: Alfa LeetCode API
@@ -207,16 +207,16 @@ export async function verifyPlatformProfile(
             }
           }
         } catch {
-          // fallback
+          // CORS blocked — fall through to format validation
         }
 
-        // Handle format fallback validation (if cors/network issues occur on third-party proxies)
-        if (/^[a-zA-Z0-9_-]{3,30}$/.test(handle)) {
+        // Format fallback — LeetCode usernames: 3–25 chars, alphanumeric + hyphen/underscore
+        if (/^[a-zA-Z0-9_-]{3,25}$/.test(handle)) {
           return {
             success: true,
             handle,
             formattedUrl,
-            message: `Handle format valid for @${handle}. Link verified.`,
+            message: `LeetCode handle @${handle} accepted.`,
           };
         }
         return {
@@ -229,75 +229,40 @@ export async function verifyPlatformProfile(
 
       case 'codechefUsername':
       case 'codechef': {
-        try {
-          const res = await fetch(`https://codechef-api.vercel.app/handle/${encodeURIComponent(handle)}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success && data.currentRating) {
-              return {
-                success: true,
-                handle,
-                formattedUrl,
-                message: `Verified! CodeChef user @${handle} found (Rating: ${data.currentRating}).`,
-                details: {
-                  rating: data.currentRating,
-                  stars: data.stars,
-                },
-              };
-            }
-          }
-        } catch {
-          // fallback
-        }
-
+        // codechef-api.vercel.app blocks cross-origin requests from production.
+        // Validate by format only — handle rules: lowercase alphanumeric + underscore, 3–30 chars.
         if (/^[a-z0-9_]{3,30}$/i.test(handle)) {
           return {
             success: true,
             handle,
             formattedUrl,
-            message: `Verified CodeChef handle @${handle}.`,
+            message: `CodeChef handle @${handle} accepted.`,
           };
         }
         return {
           success: false,
           handle,
           formattedUrl,
-          message: `CodeChef username "@${handle}" could not be verified.`,
+          message: `CodeChef username "@${handle}" contains invalid characters.`,
         };
       }
 
       case 'hackerrankUsername':
       case 'hackerrank': {
-        try {
-          const res = await fetch(`https://www.hackerrank.com/rest/hackers/${encodeURIComponent(handle)}/profile`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.model && data.model.username) {
-              return {
-                success: true,
-                handle: data.model.username,
-                formattedUrl: getCanonicalProfileUrl('hackerrankUsername', data.model.username),
-                message: `Verified! HackerRank profile @${data.model.username} confirmed.`,
-              };
-            }
-          }
-        } catch {
-          // fallback
-        }
-
+        // HackerRank blocks direct browser requests with CORS — validate by format only.
         if (/^[a-zA-Z0-9_.-]{3,40}$/.test(handle)) {
           return {
             success: true,
             handle,
             formattedUrl,
-            message: `Verified HackerRank handle @${handle}.`,
+            message: `HackerRank handle @${handle} accepted.`,
           };
         }
         return {
           success: false,
           handle,
           formattedUrl,
-          message: `HackerRank profile "@${handle}" not found.`,
+          message: `HackerRank handle "@${handle}" contains invalid characters.`,
         };
       }
 

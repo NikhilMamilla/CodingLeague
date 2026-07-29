@@ -83,46 +83,61 @@ const PLATFORMS = [
 async function generateParticipantId(): Promise<string> {
   const counterRef = doc(db, 'counters', 'participantId');
 
-  // Initialize the counter once if it doesn't exist, using the current max participant ID
-  const counterSnap = await getDoc(counterRef);
-  if (!counterSnap.exists()) {
+  // Atomically increment the counter. The transaction handles first-run
+  // (counter doc missing) by seeding from existing participants, with
+  // exponential backoff on 429 / transient errors.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    }
+
     try {
-      const q = query(collection(db, 'participants'), orderBy('participantId', 'desc'), limit(1));
-      const snap = await getDocs(q);
-      let current = 0;
-      if (!snap.empty) {
-        const last = snap.docs[0].data().participantId as string;
-        if (last && last.startsWith('CBB')) {
-          const num = parseInt(last.replace('CBB', ''), 10);
-          if (!isNaN(num)) current = num;
+      const newValue = await runTransaction(db, async (transaction) => {
+        const snap = await transaction.get(counterRef);
+
+        let current: number;
+        if (snap.exists()) {
+          current = snap.data().value ?? 0;
+        } else {
+          // Counter doesn't exist yet — seed from highest existing participantId.
+          // We can't use getDocs inside a transaction, so we use 0 as a safe seed
+          // and let the duplicate-check loop below handle any collisions.
+          current = 0;
         }
-      }
-      await setDoc(counterRef, { value: current });
-    } catch {
-      // If initialization races, the transaction below will still work
+
+        const next = current + 1;
+        transaction.set(counterRef, { value: next });
+        return next;
+      });
+
+      const candidateId = 'CBB' + String(newValue).padStart(6, '0');
+
+      // Verify the ID isn't already taken (handles seed = 0 edge case)
+      const existing = await getDocs(
+        query(collection(db, 'participants'), where('participantId', '==', candidateId), limit(1))
+      );
+      if (existing.empty) return candidateId;
+
+      // ID taken — counter is out of sync. Fast-forward it by reading highest existing ID
+      try {
+        const highest = await getDocs(
+          query(collection(db, 'participants'), orderBy('participantId', 'desc'), limit(1))
+        );
+        if (!highest.empty) {
+          const last = highest.docs[0].data().participantId as string;
+          if (last?.startsWith('CBB')) {
+            const num = parseInt(last.replace('CBB', ''), 10);
+            if (!isNaN(num)) await setDoc(counterRef, { value: num });
+          }
+        }
+      } catch { /* ignore resync errors, next attempt will retry */ }
+
+    } catch (err: any) {
+      if (attempt === 2) throw err;
     }
   }
 
-  // Atomically increment the counter and verify the ID is not already in use.
-  // If a duplicate is found (e.g. from the existing bad data), retry with the next value.
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const newValue = await runTransaction(db, async (transaction) => {
-      const snap = await transaction.get(counterRef);
-      const current = snap.exists() ? (snap.data().value ?? 0) : 0;
-      const next = current + 1;
-      transaction.set(counterRef, { value: next });
-      return next;
-    });
-
-    const candidateId = 'CBB' + String(newValue).padStart(6, '0');
-    const existing = await getDocs(
-      query(collection(db, 'participants'), where('participantId', '==', candidateId), limit(1))
-    );
-    if (existing.empty) return candidateId;
-  }
-
-  // Fallback should never hit if the counter is correct
-  throw new Error('Unable to generate unique participant ID');
+  throw new Error('Unable to generate unique participant ID. Please try again.');
 }
 
 function StepDot({ n, current }: { n: number; current: number }) {

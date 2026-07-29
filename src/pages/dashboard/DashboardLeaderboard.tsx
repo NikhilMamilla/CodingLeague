@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Participant } from '../../types';
 import { Trophy, TrendingUp, Search, Medal, Crown, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { cachedFetch } from '../../lib/cache';
 
 const TIER_CLASS: Record<string, string> = {
   Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
@@ -47,14 +48,15 @@ export default function DashboardLeaderboard() {
   const [search,  setSearch]  = useState('');
 
   useEffect(() => {
-    // No composite index needed — fetch all by rating, filter admin client-side
-    const q = query(
-      collection(db, 'participants'),
-      orderBy('rating', 'desc'),
-      limit(200)
-    );
-    const unsub = onSnapshot(q, snap => {
-      const data: LeaderRow[] = snap.docs
+    // One-time fetch with 5-min cache — leaderboard doesn't need real-time updates
+    cachedFetch('leaderboard:participants', async () => {
+      const q = query(
+        collection(db, 'participants'),
+        orderBy('rating', 'desc'),
+        limit(200)
+      );
+      const snap = await getDocs(q);
+      return snap.docs
         .map(d => ({ uid: d.id, ...d.data() } as Participant))
         .filter(p => p.role !== 'admin' && p.role !== 'super_admin')
         .map((p, i) => ({
@@ -72,32 +74,28 @@ export default function DashboardLeaderboard() {
           badges:     p.badges?.length ?? 0,
           foundingMember: p.foundingMember,
         }));
+    }).then(data => {
       setRows(data);
       setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
+    }).catch(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'contestResults'), snap => {
+    // One-time fetch with 5-min cache — contest result counts don't change mid-session
+    cachedFetch('leaderboard:contestCounts', async () => {
+      const snap = await getDocs(collection(db, 'contestResults'));
       const contestsByParticipant: Record<string, Set<string>> = {};
-
       snap.docs.forEach(d => {
         const data = d.data();
         if (!data.participantId || !data.contestId) return;
-        const participantId = String(data.participantId);
-        contestsByParticipant[participantId] ??= new Set<string>();
-        contestsByParticipant[participantId].add(String(data.contestId));
+        const pid = String(data.participantId);
+        contestsByParticipant[pid] ??= new Set<string>();
+        contestsByParticipant[pid].add(String(data.contestId));
       });
-
-      setContestCounts(
-        Object.fromEntries(
-          Object.entries(contestsByParticipant).map(([participantId, contests]) => [participantId, contests.size])
-        )
+      return Object.fromEntries(
+        Object.entries(contestsByParticipant).map(([pid, contests]) => [pid, contests.size])
       );
-    });
-
-    return () => unsub();
+    }).then(counts => setContestCounts(counts)).catch(() => {});
   }, []);
 
   const rowsWithActualContests = rows.map(r => ({

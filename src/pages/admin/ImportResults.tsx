@@ -16,8 +16,8 @@ import {
 } from '../../lib/ratingEngine';
 import { Upload, FileText, AlertCircle, CheckCircle, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
-
 import { extractHandle } from '../../lib/profileVerification';
+import { cacheInvalidateAll } from '../../lib/cache';
 
 interface ParsedRow {
   rank: number;
@@ -286,6 +286,8 @@ export default function ImportResults() {
       });
 
       await batch.commit();
+      // Invalidate all caches so leaderboard/schedule reflect new results immediately
+      cacheInvalidateAll();
       toast.success(`✅ CWCL v1.0 Rating calculations published for ${contest.name}!`);
 
       // Evaluate badges

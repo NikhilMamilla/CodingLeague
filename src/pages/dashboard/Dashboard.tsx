@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import {
   collection, query, where, orderBy, limit,
-  onSnapshot, doc, getDoc,
+  onSnapshot, doc, getDoc, getDocs,
 } from 'firebase/firestore';
 import { downloadFoundingCertificate } from '../../lib/certificateGenerator';
 import { db } from '../../lib/firebase';
@@ -16,6 +16,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import type { Contest, ContestResult, Announcement } from '../../types';
 import { BADGE_META } from '../../types';
 import toast from 'react-hot-toast';
+import { cachedFetch } from '../../lib/cache';
 
 const TIER_CFG: Record<string, { cls: string; next: number; min: number; nextName: string }> = {
   Beginner:               { cls: 'text-gray-400 font-semibold',    next: 900,   min: 800,  nextName: 'Explorer'              },
@@ -128,7 +129,7 @@ export default function Dashboard() {
   useEffect(() => {
     const unsubs: (() => void)[] = [];
 
-    // Active live contest
+    // ── Real-time: active/upcoming contest (small, needs to be live) ──
     unsubs.push(onSnapshot(
       query(collection(db, 'contests'), where('status', '==', 'Active'), limit(1)),
       s => {
@@ -136,8 +137,6 @@ export default function Dashboard() {
         setLoadingContest(false);
       }
     ));
-
-    // Upcoming contest
     unsubs.push(onSnapshot(
       query(collection(db, 'contests'), where('status', '==', 'Upcoming'), orderBy('date', 'asc'), limit(1)),
       s => {
@@ -146,71 +145,67 @@ export default function Dashboard() {
       }
     ));
 
-    // Top 10 leaderboard display + rank calculation — real-time
-    // Fetch limit(200) to find current user's actual rank, display only top 10
-    unsubs.push(onSnapshot(
-      query(collection(db,'participants'), orderBy('rating','desc'), limit(200)),
-      s => {
-        const allRows = s.docs
-          .map(d => ({ uid: d.id, ...d.data() } as LeaderRow))
-          .filter(r => (r as any).role !== 'admin' && (r as any).role !== 'super_admin');
-        allRows.forEach(r => { r.foundingMember = !!(r as any).foundingMember; });
-
-        // Top 10 for display
-        const rows = allRows.slice(0, 10);
-        setLeaderboard(rows);
-
-        // Find actual rank from full list
-        if (participant) {
-          const idx = allRows.findIndex(r => r.uid === participant.uid);
-          setMyRank(idx !== -1 ? idx + 1 : null);
-        }
-        setLoadingLeader(false);
+    // ── Cached: leaderboard top-200 (5-min TTL, shared with leaderboard page) ──
+    cachedFetch('leaderboard:participants', async () => {
+      const snap = await getDocs(
+        query(collection(db, 'participants'), orderBy('rating', 'desc'), limit(200))
+      );
+      return snap.docs
+        .map(d => ({ uid: d.id, ...d.data() } as LeaderRow & { role?: string }))
+        .filter(r => r.role !== 'admin' && r.role !== 'super_admin');
+    }).then(allRows => {
+      const rows = allRows.slice(0, 10) as LeaderRow[];
+      rows.forEach(r => { r.foundingMember = !!(r as any).foundingMember; });
+      setLeaderboard(rows);
+      if (participant) {
+        const idx = (allRows as LeaderRow[]).findIndex(r => r.uid === participant.uid);
+        setMyRank(idx !== -1 ? idx + 1 : null);
       }
-    ));
+      setLoadingLeader(false);
+    }).catch(() => setLoadingLeader(false));
 
-    // Announcements — real-time
+    // ── Real-time: announcements (admin posts these, must be live) ──
     unsubs.push(onSnapshot(
-      query(collection(db,'announcements'), orderBy('createdAt','desc'), limit(4)),
+      query(collection(db, 'announcements'), orderBy('createdAt', 'desc'), limit(4)),
       s => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() } as AnnouncementRow)))
     ));
 
-    // Community WhatsApp link
-    getDoc(doc(db, 'settings', 'community')).then(snap => {
-      if (snap.exists()) {
-        const link = snap.data().announcementWhatsapp;
-        if (link) setAnnouncementWhatsapp(link);
-      }
+    // ── Cached: community WhatsApp link ──
+    cachedFetch('settings:community', async () => {
+      const snap = await getDoc(doc(db, 'settings', 'community'));
+      return snap.exists() ? snap.data() : null;
+    }).then(data => {
+      if (data?.announcementWhatsapp) setAnnouncementWhatsapp(data.announcementWhatsapp);
     }).catch(() => {});
 
-    // Live founding member slot counter
-    unsubs.push(onSnapshot(
-      query(collection(db, 'participants'), where('foundingMember', '==', true)),
-      s => {
-        setFoundingSlots(prev => ({ ...prev, claimed: s.size }));
-      }
-    ));
+    // ── Cached: founding member settings + count ──
+    cachedFetch('settings:foundingMembers', async () => {
+      const [settingsSnap, countSnap] = await Promise.all([
+        getDoc(doc(db, 'settings', 'foundingMembers')),
+        getDocs(query(collection(db, 'participants'), where('foundingMember', '==', true))),
+      ]);
+      return {
+        settings: settingsSnap.exists() ? settingsSnap.data() : null,
+        count: countSnap.size,
+      };
+    }).then(({ settings, count }) => {
+      setFoundingSlots(prev => ({
+        enabled: settings?.enabled === true,
+        claimed: count,
+        max: Number(settings?.maxFoundingMembers) || prev.max,
+        seasonLabel: settings?.seasonLabel || prev.seasonLabel,
+      }));
+    }).catch(() => {});
 
-    // Founding member settings
-    unsubs.push(onSnapshot(
-      doc(db, 'settings', 'foundingMembers'),
-      s => {
-        if (s.exists()) {
-          const data = s.data();
-          setFoundingSlots(prev => ({
-            ...prev,
-            enabled: data.enabled === true,
-            max: Number(data.maxFoundingMembers) || prev.max,
-            seasonLabel: data.seasonLabel || prev.seasonLabel,
-          }));
-        }
-      }
-    ));
-
-    // Recent results — index on (participantId, contestId) is now enabled
+    // ── Real-time: user's own recent results ──
     if (participant) {
       unsubs.push(onSnapshot(
-        query(collection(db,'contestResults'), where('participantId','==',participant.participantId), orderBy('contestId','desc'), limit(5)),
+        query(
+          collection(db, 'contestResults'),
+          where('participantId', '==', participant.participantId),
+          orderBy('contestId', 'desc'),
+          limit(5)
+        ),
         s => setRecentResults(s.docs.map(d => d.data() as ContestResult))
       ));
     }

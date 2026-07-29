@@ -4,9 +4,10 @@ import {
   Calendar, Filter, Bell, ExternalLink, Trophy, Zap
 } from 'lucide-react';
 import CBBLogo from '../../components/ui/CBBLogo';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import type { Contest as FirestoreContest } from '../../types';
+import { cachedFetch } from '../../lib/cache';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type FilterType = 'All' | 'Online' | 'Offline' | 'Bonus' | 'Upcoming' | 'Completed';
@@ -331,14 +332,16 @@ export default function Schedule() {
   const [loading,  setLoading]  = useState(true);
   const [filter,   setFilter]   = useState<FilterType>('All');
 
-  // Real-time from Firestore — reflects any admin changes immediately
+  // Cached fetch — contest schedule rarely changes mid-session
   useEffect(() => {
-    const q = query(collection(db, 'contests'), orderBy('date', 'asc'));
-    const unsub = onSnapshot(q, snap => {
-      setContests(snap.docs.map(d => ({ id: d.id, ...d.data() } as FirestoreContest)));
+    cachedFetch('contests:all', async () => {
+      const q = query(collection(db, 'contests'), orderBy('date', 'asc'));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() } as FirestoreContest));
+    }).then(data => {
+      setContests(data);
       setLoading(false);
-    }, () => { setLoading(false); });
-    return () => unsub();
+    }).catch(() => setLoading(false));
   }, []);
 
   const nextContest = contests.find(c => getContestStatus(c) === 'Live')
