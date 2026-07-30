@@ -36,6 +36,18 @@ export default function ManageUsers() {
     }).catch(() => setLoading(false));
   }, []);
 
+  // Detect if there's a gap in CBB IDs
+  const hasIdGap = (() => {
+    const nums = participants
+      .map(p => parseInt((p.participantId || '').replace(/\D/g, ''), 10))
+      .filter(n => !isNaN(n) && n > 0)
+      .sort((a, b) => a - b);
+    for (let i = 0; i < nums.length; i++) {
+      if (nums[i] !== i + 1) return true;
+    }
+    return false;
+  })();
+
   async function handleCompactIds() {
     const confirmed = confirm(
       `COMPACT ALL PARTICIPANT IDs\n\n` +
@@ -80,14 +92,16 @@ export default function ManageUsers() {
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
-          <button
-            onClick={handleCompactIds}
-            disabled={fixing}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-electric-blue/40 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 text-xs font-medium transition-colors disabled:opacity-50"
-          >
-            <Wrench size={12} />
-            {fixing ? 'Compacting…' : 'Compact All IDs (Close Gaps)'}
-          </button>
+          {hasIdGap && (
+            <button
+              onClick={handleCompactIds}
+              disabled={fixing}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-electric-blue/40 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 text-xs font-medium transition-colors disabled:opacity-50"
+            >
+              <Wrench size={12} />
+              {fixing ? 'Compacting…' : 'Compact All IDs (Close Gaps)'}
+            </button>
+          )}
           <div className="relative w-full sm:w-72">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/50" />
             <input className="input-field pl-9 py-2 text-xs" placeholder="Search name, email, college, ID…"
