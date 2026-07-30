@@ -155,13 +155,13 @@ export default function MyProfile() {
     setSavingDetails(true);
     try {
       await updateParticipant(user!.uid, {
-        college:    college.trim()    || null,
-        university: university.trim() || null,
-        branch:     branch.trim()     || null,
-        year:       year              || null,
-        city:       city.trim()       || null,
-        state:      state.trim()      || null,
-        phone:      phone.trim()      || null,
+        college:    college.trim().toUpperCase()    || null,
+        university: university.trim().toUpperCase() || null,
+        branch:     branch.trim().toUpperCase()     || null,
+        year:       year                            || null,
+        city:       city.trim()                     || null,
+        state:      state.trim()                    || null,
+        phone:      phone.trim()                    || null,
       });
       await refreshParticipant();
       toast.success('Details saved!');
@@ -318,7 +318,7 @@ export default function MyProfile() {
               <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
                 <GraduationCap size={10} className="shrink-0" /> College
               </label>
-              <input className="input-field text-xs py-2" value={college} onChange={e => setCollege(e.target.value)} placeholder="College name" />
+              <input className="input-field text-xs py-2" value={college} onChange={e => setCollege(e.target.value.toUpperCase())} placeholder="e.g. BVRIT" style={{ textTransform: 'uppercase' }} />
             </div>
 
             {/* University */}
@@ -326,7 +326,7 @@ export default function MyProfile() {
               <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
                 <GraduationCap size={10} className="shrink-0" /> University
               </label>
-              <input className="input-field text-xs py-2" value={university} onChange={e => setUniversity(e.target.value)} placeholder="University name" />
+              <input className="input-field text-xs py-2" value={university} onChange={e => setUniversity(e.target.value.toUpperCase())} placeholder="e.g. JNTUH" style={{ textTransform: 'uppercase' }} />
             </div>
 
             {/* Branch */}
@@ -334,7 +334,7 @@ export default function MyProfile() {
               <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
                 <GraduationCap size={10} className="shrink-0" /> Branch
               </label>
-              <input className="input-field text-xs py-2" value={branch} onChange={e => setBranch(e.target.value)} placeholder="e.g. CSE, ECE" />
+              <input className="input-field text-xs py-2" value={branch} onChange={e => setBranch(e.target.value.toUpperCase())} placeholder="e.g. CSE, ECE" style={{ textTransform: 'uppercase' }} />
             </div>
 
             {/* Year */}

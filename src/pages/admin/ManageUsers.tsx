@@ -117,6 +117,38 @@ export default function ManageUsers() {
     }
   }
 
+  async function handleUppercaseAllColleges() {
+    if (!confirm(`Convert ALL ${participants.length} participants' college, university and branch to UPPERCASE?\n\nThis runs in batches and may take a moment.`)) return;
+    setRenamingCollege('__all__');
+    try {
+      let fixed = 0;
+      for (const p of participants) {
+        const newCollege    = p.college?.trim().toUpperCase() || null;
+        const newUniversity = (p as any).university?.trim().toUpperCase() || null;
+        const newBranch     = (p as any).branch?.trim().toUpperCase() || null;
+        const needsUpdate =
+          (p.college !== newCollege) ||
+          ((p as any).university !== newUniversity) ||
+          ((p as any).branch !== newBranch);
+        if (!needsUpdate) continue;
+        await supabase.from('participants').update({
+          ...(newCollege    !== p.college              && { college:    newCollege    }),
+          ...(newUniversity !== (p as any).university  && { university: newUniversity }),
+          ...(newBranch     !== (p as any).branch      && { branch:     newBranch     }),
+        }).eq('uid', p.uid);
+        fixed++;
+      }
+      // Reload
+      const fresh = await getParticipantsLatestFirst(500);
+      setParticipants(fresh.filter(p => p.role !== 'admin' && p.role !== 'super_admin'));
+      toast.success(`Done! Uppercased ${fixed} participants' college/university/branch.`, { duration: 5000 });
+    } catch (e: any) {
+      toast.error('Failed: ' + (e.message ?? 'Unknown error'));
+    } finally {
+      setRenamingCollege(null);
+    }
+  }
+
   const filteredColleges = sortedColleges.filter(([name]) =>
     !collegeSearch || name.toLowerCase().includes(collegeSearch.toLowerCase())
   );
@@ -451,9 +483,18 @@ export default function ManageUsers() {
                   <p className="text-text-secondary/60 text-[10px] mt-0.5">{sortedColleges.length} unique college names · {participants.length} total participants</p>
                 </div>
               </div>
-              <button onClick={() => setShowNormalize(false)} className="text-text-secondary hover:text-white transition-colors">
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleUppercaseAllColleges}
+                  disabled={renamingCollege === '__all__'}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-warning/30 bg-warning/10 text-warning hover:bg-warning/20 text-xs font-medium transition-colors disabled:opacity-50"
+                >
+                  {renamingCollege === '__all__' ? 'Converting…' : '⬆ Uppercase All'}
+                </button>
+                <button onClick={() => setShowNormalize(false)} className="text-text-secondary hover:text-white transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
             <div className="p-5 space-y-4">
