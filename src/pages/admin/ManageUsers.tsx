@@ -93,23 +93,20 @@ export default function ManageUsers() {
     setRenamingCollege(oldName);
     try {
       const lookupName = oldName === '(blank)' ? '' : oldName;
-      const { error } = await supabase
-        .from('participants')
-        .update({ college: newName })
-        .eq('college', lookupName);
+      const { data, error } = await supabase.rpc('bulk_rename_college', {
+        old_name: lookupName,
+        new_name: newName,
+      });
       if (error) throw new Error(error.message);
-      // Update local state
+      const count = data as number;
+      // Update local state instantly
       setParticipants(prev =>
         prev.map(p =>
           (p.college?.trim() || '') === lookupName ? { ...p, college: newName } : p
         )
       );
-      setRenameMap(prev => {
-        const next = { ...prev };
-        delete next[oldName];
-        return next;
-      });
-      toast.success(`Renamed "${oldName === '(blank)' ? '(blank)' : oldName}" → "${newName}"`);
+      setRenameMap(prev => { const next = { ...prev }; delete next[oldName]; return next; });
+      toast.success(`Renamed "${oldName || '(blank)'}" → "${newName}" for ${count} student(s)`);
     } catch (e: any) {
       toast.error('Rename failed: ' + (e.message ?? 'Unknown error'));
     } finally {
@@ -118,30 +115,14 @@ export default function ManageUsers() {
   }
 
   async function handleUppercaseAllColleges() {
-    if (!confirm(`Convert ALL ${participants.length} participants' college, university and branch to UPPERCASE?\n\nThis runs in batches and may take a moment.`)) return;
+    if (!confirm(`Convert ALL ${participants.length} participants' college, university and branch to UPPERCASE?\n\nThis runs instantly via SQL.`)) return;
     setRenamingCollege('__all__');
     try {
-      let fixed = 0;
-      for (const p of participants) {
-        const newCollege    = p.college?.trim().toUpperCase() || null;
-        const newUniversity = (p as any).university?.trim().toUpperCase() || null;
-        const newBranch     = (p as any).branch?.trim().toUpperCase() || null;
-        const needsUpdate =
-          (p.college !== newCollege) ||
-          ((p as any).university !== newUniversity) ||
-          ((p as any).branch !== newBranch);
-        if (!needsUpdate) continue;
-        await supabase.from('participants').update({
-          ...(newCollege    !== p.college              && { college:    newCollege    }),
-          ...(newUniversity !== (p as any).university  && { university: newUniversity }),
-          ...(newBranch     !== (p as any).branch      && { branch:     newBranch     }),
-        }).eq('uid', p.uid);
-        fixed++;
-      }
-      // Reload
+      const { error } = await supabase.rpc('uppercase_all_colleges');
+      if (error) throw new Error(error.message);
       const fresh = await getParticipantsLatestFirst(500);
       setParticipants(fresh.filter(p => p.role !== 'admin' && p.role !== 'super_admin'));
-      toast.success(`Done! Uppercased ${fixed} participants' college/university/branch.`, { duration: 5000 });
+      toast.success('Done! All colleges, universities and branches converted to UPPERCASE.', { duration: 5000 });
     } catch (e: any) {
       toast.error('Failed: ' + (e.message ?? 'Unknown error'));
     } finally {
