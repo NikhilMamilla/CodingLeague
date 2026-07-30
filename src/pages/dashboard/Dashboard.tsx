@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import {
   TrendingUp, Trophy, Calendar, Award, Zap,
   Star, Code2, ExternalLink, User, ChevronRight,
-  Megaphone, Crown, Info, Users, X, Send,
+  Megaphone, Crown, Info, Users, Send,
   Sparkles, Download,
 } from 'lucide-react';
 import { downloadFoundingCertificate } from '../../lib/certificateGenerator';
@@ -116,9 +116,6 @@ export default function Dashboard() {
   const [loadingContest,  setLoadingContest]  = useState(true);
   const [loadingLeader,   setLoadingLeader]   = useState(true);
   const [myRank,          setMyRank]          = useState<number | null>(null);
-  const [communityBannerDismissed, setCommunityBannerDismissed] = useState(() => {
-    return localStorage.getItem('cwcl_community_banner_dismissed') === 'true';
-  });
   const [announcementWhatsapp, setAnnouncementWhatsapp] = useState('');
   const [foundingSlots, setFoundingSlots] = useState<FoundingSlotState>({ enabled: false, claimed: 0, max: 20, seasonLabel: '2026–27' });
 
@@ -132,7 +129,7 @@ export default function Dashboard() {
       setLoadingContest(false);
     }).catch(() => setLoadingContest(false));
 
-    // Leaderboard
+    // Leaderboard - only top 10 for overview
     getParticipants(200).then(all => {
       const filtered = all.filter(r => r.role !== 'admin' && r.role !== 'super_admin');
       setLeaderboard(filtered.slice(0, 10) as LeaderRow[]);
@@ -272,8 +269,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Community Banner ── */}
-      {!communityBannerDismissed && announcementWhatsapp && (
+      {/* ── Community Banner (Always shown after stat cards) ── */}
+      {announcementWhatsapp && (
         <div className="relative bg-card-dark border border-neon-cyan/25 rounded-xl p-4 md:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-start gap-3 flex-1">
             <div className="w-9 h-9 rounded-lg bg-neon-cyan/10 border border-neon-cyan/30 flex items-center justify-center shrink-0 mt-0.5">
@@ -291,19 +288,12 @@ export default function Dashboard() {
             >
               <Send size={11} /> Join Now
             </a>
-            <button
-              onClick={() => { setCommunityBannerDismissed(true); localStorage.setItem('cwcl_community_banner_dismissed', 'true'); }}
-              className="text-text-secondary/50 hover:text-white p-1 transition-colors"
-              aria-label="Dismiss banner"
-            >
-              <X size={14} />
-            </button>
           </div>
         </div>
       )}
 
       {/* ── Stat Grid ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
           icon={TrendingUp}
           label="Rating"
@@ -322,6 +312,29 @@ export default function Dashboard() {
           infoText="Limited founding member slots for the inaugural season. First come, first served."
         />
       </div>
+
+      {/* ── Community Banner (Always shown after stat cards) ── */}
+      {announcementWhatsapp && (
+        <div className="relative bg-card-dark border border-neon-cyan/25 rounded-xl p-4 md:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3 flex-1">
+            <div className="w-9 h-9 rounded-lg bg-neon-cyan/10 border border-neon-cyan/30 flex items-center justify-center shrink-0 mt-0.5">
+              <Users size={16} className="text-neon-cyan" />
+            </div>
+            <div>
+              <p className="text-white text-xs font-semibold">Join our Official CWCL WhatsApp Announcement Community</p>
+              <p className="text-text-secondary text-[11px] mt-0.5">Receive contest updates, results, and important notifications directly.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href={announcementWhatsapp} target="_blank" rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-neon-cyan text-midnight font-heading font-bold text-[10px] uppercase tracking-widest hover:shadow-[0_0_15px_rgba(0,229,255,0.4)] transition-all active:scale-95"
+            >
+              <Send size={11} /> Join Now
+            </a>
+          </div>
+        </div>
+      )}
 
       {/* ── Upcoming Contest + Competitive Profiles ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

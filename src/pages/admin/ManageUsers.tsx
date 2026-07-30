@@ -3,11 +3,11 @@ import type { Participant } from '../../types';
 import { BADGE_META } from '../../types';
 import {
   Search, User, GraduationCap, Mail, Phone, MapPin, Code2,
-  X, Shield, ExternalLink, Link2, Trash2,
+  X, Shield, ExternalLink, Link2, Trash2, Wrench,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getCanonicalProfileUrl } from '../../lib/profileVerification';
-import { getParticipantsLatestFirst, deleteParticipant } from '../../lib/db';
+import { getParticipantsLatestFirst, deleteParticipant, compactParticipantIds } from '../../lib/db';
 
 const TIER_CLASS: Record<string, string> = {
   Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
@@ -27,6 +27,7 @@ export default function ManageUsers() {
   const [loading, setLoading] = useState(true);
   const [search,  setSearch]  = useState('');
   const [viewing, setViewing] = useState<Participant | null>(null);
+  const [fixing,  setFixing]  = useState(false);
 
   useEffect(() => {
     getParticipantsLatestFirst(500).then(data => {
@@ -34,6 +35,31 @@ export default function ManageUsers() {
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
+
+  async function handleCompactIds() {
+    const confirmed = confirm(
+      `COMPACT ALL PARTICIPANT IDs\n\n` +
+      `This will:\n` +
+      `1. Find all participant IDs\n` +
+      `2. Renumber them sequentially 1, 2, 3... (no gaps)\n` +
+      `3. Set the counter to the new max\n\n` +
+      `Current total: ${participants.length}\n` +
+      `After compact: IDs will be CBB000001 through CBB${String(participants.length).padStart(6, '0')}\n\n` +
+      `This fixes all gaps permanently. Proceed?`
+    );
+    if (!confirmed) return;
+    setFixing(true);
+    try {
+      const { renamed, newMax } = await compactParticipantIds();
+      toast.success(`Done! Renamed ${renamed} IDs. New max: ${newMax}. Counter set to ${newMax}.`, { duration: 5000 });
+      const fresh = await getParticipantsLatestFirst(500);
+      setParticipants(fresh.filter(p => p.role !== 'admin' && p.role !== 'super_admin'));
+    } catch (e: any) {
+      toast.error('Compact failed: ' + (e.message ?? 'Unknown error'));
+    } finally {
+      setFixing(false);
+    }
+  }
 
   const filtered = participants.filter(p =>
     !search ||
@@ -53,10 +79,20 @@ export default function ManageUsers() {
             {participants.length} registered · updates live
           </p>
         </div>
-        <div className="relative w-full sm:w-72">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/50" />
-          <input className="input-field pl-9 py-2 text-xs" placeholder="Search name, email, college, ID…"
-            value={search} onChange={e => setSearch(e.target.value)} />
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={handleCompactIds}
+            disabled={fixing}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-electric-blue/40 bg-electric-blue/10 text-electric-blue hover:bg-electric-blue/20 text-xs font-medium transition-colors disabled:opacity-50"
+          >
+            <Wrench size={12} />
+            {fixing ? 'Compacting…' : 'Compact All IDs (Close Gaps)'}
+          </button>
+          <div className="relative w-full sm:w-72">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/50" />
+            <input className="input-field pl-9 py-2 text-xs" placeholder="Search name, email, college, ID…"
+              value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
         </div>
       </div>
 

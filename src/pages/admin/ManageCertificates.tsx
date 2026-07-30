@@ -41,6 +41,11 @@ export default function ManageCertificates() {
   const [season] = useState('2026-27');
   const [position, setPosition] = useState('1st');
   const [issuedDateStr, setIssuedDateStr] = useState('29th August 2026');
+  
+  // Participant selector search & filters
+  const [participantSearch, setParticipantSearch] = useState('');
+  const [collegeFilter, setCollegeFilter] = useState<string>('all');
+  const [branchFilter, setBranchFilter] = useState<string>('all');
 
   // Bulk Generation Progress
   const [isGenerating, setIsGenerating] = useState(false);
@@ -174,6 +179,21 @@ export default function ManageCertificates() {
       setDeleteCertTarget(null);
     } catch { toast.error('Failed to delete certificate'); }
   }
+
+  // Filtered participants for selector
+  const filteredParticipants = participants.filter(p => {
+    const matchSearch = !participantSearch ||
+      p.fullName.toLowerCase().includes(participantSearch.toLowerCase()) ||
+      p.email.toLowerCase().includes(participantSearch.toLowerCase()) ||
+      p.participantId?.toLowerCase().includes(participantSearch.toLowerCase());
+    const matchCollege = collegeFilter === 'all' || p.college === collegeFilter;
+    const matchBranch = branchFilter === 'all' || p.branch === branchFilter;
+    return matchSearch && matchCollege && matchBranch;
+  });
+
+  // Unique colleges and branches for filters
+  const uniqueColleges = Array.from(new Set(participants.map(p => p.college))).sort();
+  const uniqueBranches = Array.from(new Set(participants.map(p => p.branch))).sort();
 
   return (
     <div className="space-y-6">
@@ -424,50 +444,103 @@ export default function ManageCertificates() {
               <div className="space-y-4 text-xs">
                 {/* Select Participants */}
                 <div>
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center justify-between mb-2">
                     <label className="input-label mb-0">Select Participant(s) *</label>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSelectedUids(
-                          selectedUids.length === participants.length
-                            ? []
-                            : participants.map((p) => p.uid)
-                        )
-                      }
-                      className="text-[10px] text-neon-cyan hover:underline"
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const top10 = filteredParticipants.slice(0, 10).map(p => p.uid);
+                          setSelectedUids(top10);
+                        }}
+                        className="text-[10px] text-electric-blue hover:underline"
+                      >
+                        Top 10
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedUids(
+                            selectedUids.length === filteredParticipants.length
+                              ? []
+                              : filteredParticipants.map((p) => p.uid)
+                          )
+                        }
+                        className="text-[10px] text-neon-cyan hover:underline"
+                      >
+                        {selectedUids.length === filteredParticipants.length ? 'Deselect All' : 'Select All'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Search bar for participants */}
+                  <div className="relative mb-2">
+                    <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-text-secondary/50" />
+                    <input
+                      className="input-field pl-8 py-1.5 text-xs"
+                      placeholder="Search name, email, ID…"
+                      value={participantSearch}
+                      onChange={(e) => setParticipantSearch(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Filters */}
+                  <div className="flex gap-2 mb-2">
+                    <select
+                      className="input-field text-[10px] py-1 px-2 flex-1"
+                      value={collegeFilter}
+                      onChange={(e) => setCollegeFilter(e.target.value)}
                     >
-                      {selectedUids.length === participants.length ? 'Deselect All' : 'Select All Participants'}
-                    </button>
+                      <option value="all">All Colleges</option>
+                      {uniqueColleges.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <select
+                      className="input-field text-[10px] py-1 px-2 flex-1"
+                      value={branchFilter}
+                      onChange={(e) => setBranchFilter(e.target.value)}
+                    >
+                      <option value="all">All Branches</option>
+                      {uniqueBranches.map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
                   </div>
 
                   <div className="max-h-44 overflow-y-auto border border-white/10 rounded-lg p-2 bg-midnight/80 space-y-1">
-                    {participants.map((p) => {
-                      const selected = selectedUids.includes(p.uid);
-                      return (
-                        <label
-                          key={p.uid}
-                          className={`flex items-center gap-2 p-1.5 rounded cursor-pointer transition-colors ${
-                            selected ? 'bg-neon-cyan/10 border border-neon-cyan/30' : 'hover:bg-white/5'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={(e) => {
-                              if (e.target.checked) setSelectedUids((prev) => [...prev, p.uid]);
-                              else setSelectedUids((prev) => prev.filter((id) => id !== p.uid));
-                            }}
-                            className="accent-[#00E5FF]"
-                          />
-                          <span className="text-white font-medium">{p.fullName}</span>
-                          <span className="text-[10px] text-text-secondary">({p.email})</span>
-                        </label>
-                      );
-                    })}
+                    {filteredParticipants.length === 0 ? (
+                      <p className="text-[11px] text-text-secondary/50 text-center py-4">No participants found</p>
+                    ) : (
+                      filteredParticipants.map((p) => {
+                        const selected = selectedUids.includes(p.uid);
+                        return (
+                          <label
+                            key={p.uid}
+                            className={`flex items-center gap-2 p-1.5 rounded cursor-pointer transition-colors ${
+                              selected ? 'bg-neon-cyan/10 border border-neon-cyan/30' : 'hover:bg-white/5'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={(e) => {
+                                if (e.target.checked) setSelectedUids((prev) => [...prev, p.uid]);
+                                else setSelectedUids((prev) => prev.filter((id) => id !== p.uid));
+                              }}
+                              className="accent-[#00E5FF]"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <span className="text-white font-medium text-xs block truncate">{p.fullName}</span>
+                              <span className="text-[10px] text-text-secondary block truncate">{p.participantId} · {p.email}</span>
+                            </div>
+                          </label>
+                        );
+                      })
+                    )}
                   </div>
                   <p className="text-[10px] text-text-secondary mt-1">
-                    Selected: <span className="text-neon-cyan font-bold">{selectedUids.length}</span> participant(s)
+                    Selected: <span className="text-neon-cyan font-bold">{selectedUids.length}</span> / Showing: <span className="text-white">{filteredParticipants.length}</span> / Total: {participants.length}
                   </p>
                 </div>
 

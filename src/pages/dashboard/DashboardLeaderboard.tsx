@@ -232,61 +232,91 @@ export default function DashboardLeaderboard() {
 
 /* ── Full leaderboard table ── */
 function FullTable({ rows, myUid }: { rows: LeaderRow[]; myUid?: string }) {
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(0);
+  const totalPages = Math.ceil(rows.length / PAGE_SIZE);
+  const pageRows = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs font-body min-w-[600px]">
-        <thead>
-          <tr className="border-b border-neon-cyan/10">
-            {['Rank', 'Participant', 'College', 'Rating', 'Tier', 'Contests', 'Badges'].map(h => (
-              <th key={h} className="text-left py-2.5 px-3 text-[10px] text-text-secondary/60 uppercase tracking-wider font-medium">{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-white/5">
-          {rows.map(r => {
-            const isMe = r.uid === myUid;
-            return (
-              <tr key={r.uid}
-                className={`transition-colors ${isMe
-                  ? 'bg-neon-cyan/5 border-l-2 border-l-neon-cyan'
-                  : 'hover:bg-white/5'
-                }`}>
-                <td className="py-3 px-3">
-                  <RankBadge rank={r.rank} />
-                </td>
-                <td className="py-3 px-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-full bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center shrink-0">
-                      <span className="font-heading text-[11px] text-neon-cyan font-bold">
-                        {r.name.charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <div>
-                      <div className={`flex items-center gap-1.5 ${isMe ? 'text-neon-cyan' : 'text-white'} font-medium`}>
-                        {r.name} {isMe && <span className="text-[10px] text-neon-cyan/70">(you)</span>}
-                        {r.foundingMember && (
-                          <span title="Founding Member" className="text-gold"><Crown size={11} /></span>
-                        )}
+    <div className="space-y-4">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs font-body min-w-[600px]">
+          <thead>
+            <tr className="border-b border-neon-cyan/10">
+              {['Rank', 'Participant', 'College', 'Rating', 'Tier', 'Contests', 'Badges'].map(h => (
+                <th key={h} className="text-left py-2.5 px-3 text-[10px] text-text-secondary/60 uppercase tracking-wider font-medium">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {pageRows.map(r => {
+              const isMe = r.uid === myUid;
+              return (
+                <tr key={r.uid}
+                  className={`transition-colors ${isMe
+                    ? 'bg-neon-cyan/5 border-l-2 border-l-neon-cyan'
+                    : 'hover:bg-white/5'
+                  }`}>
+                  <td className="py-3 px-3">
+                    <RankBadge rank={r.rank} />
+                  </td>
+                  <td className="py-3 px-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center shrink-0">
+                        <span className="font-heading text-[11px] text-neon-cyan font-bold">
+                          {r.name.charAt(0).toUpperCase()}
+                        </span>
                       </div>
-                      <div className="text-text-secondary/60 text-[10px] font-numbers">{r.id}</div>
+                      <div>
+                        <div className={`flex items-center gap-1.5 ${isMe ? 'text-neon-cyan' : 'text-white'} font-medium`}>
+                          {r.name} {isMe && <span className="text-[10px] text-neon-cyan/70">(you)</span>}
+                          {r.foundingMember && (
+                            <span title="Founding Member" className="text-gold"><Crown size={11} /></span>
+                          )}
+                        </div>
+                        <div className="text-text-secondary/60 text-[10px] font-numbers">{r.id}</div>
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td className="py-3 px-3 text-text-secondary">
-                  <div>{r.college}</div>
-                  <div className="text-[10px] text-text-secondary/50">{r.branch} · {r.year}</div>
-                </td>
-                <td className="py-3 px-3 font-numbers font-bold text-neon-cyan">{r.rating}</td>
-                <td className="py-3 px-3">
-                  <span className={TIER_CLASS[r.tier]}>{r.tier}</span>
-                </td>
-                <td className="py-3 px-3 font-numbers text-text-secondary">{r.contests}</td>
-                <td className="py-3 px-3 font-numbers text-text-secondary">{r.badges}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  </td>
+                  <td className="py-3 px-3 text-text-secondary">
+                    <div>{r.college}</div>
+                    <div className="text-[10px] text-text-secondary/50">{r.branch} · {r.year}</div>
+                  </td>
+                  <td className="py-3 px-3 font-numbers font-bold text-neon-cyan">{r.rating}</td>
+                  <td className="py-3 px-3">
+                    <span className={TIER_CLASS[r.tier]}>{r.tier}</span>
+                  </td>
+                  <td className="py-3 px-3 font-numbers text-text-secondary">{r.contests}</td>
+                  <td className="py-3 px-3 font-numbers text-text-secondary">{r.badges}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-3 border-t border-white/5">
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-white/10 text-xs text-text-secondary hover:text-white hover:border-neon-cyan/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            ← Prev
+          </button>
+          <span className="text-[11px] text-text-secondary/60 font-numbers">
+            Page {page + 1} of {totalPages} · {rows.length} participants
+          </span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-white/10 text-xs text-text-secondary hover:text-white hover:border-neon-cyan/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            Next →
+          </button>
+        </div>
+      )}
     </div>
   );
 }

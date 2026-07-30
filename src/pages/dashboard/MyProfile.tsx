@@ -148,68 +148,66 @@ export default function MyProfile() {
         <p className="text-text-secondary text-xs mt-1">Manage your public profile and competitive handles.</p>
       </div>
 
-      {/* ── ROW 1: Identity card + Badges ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-        <Card title="Identity" icon={User}>
-          <div className="flex items-center gap-5">
-            <div className="relative shrink-0">
-              <div className={`w-20 h-20 rounded-full bg-neon-cyan/10 overflow-hidden flex items-center justify-center ${participant.foundingMember ? 'founding-avatar' : 'border-2 border-neon-cyan/30'}`}>
-                {participant.photoURL
-                  ? <img src={participant.photoURL} alt="" className="w-full h-full object-cover" />
-                  : <span className={`font-heading text-3xl font-bold ${participant.foundingMember ? 'text-gold' : 'text-neon-cyan'}`}>
-                      {participant.fullName.charAt(0).toUpperCase()}
-                    </span>
-                }
-              </div>
-              <button onClick={() => fileRef.current?.click()} disabled={uploading}
-                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-neon-cyan text-midnight flex items-center justify-center hover:bg-neon-cyan/80 transition-colors shadow-md">
-                <Camera size={12} />
-              </button>
-              <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
-            </div>
-            <div className="min-w-0">
-              <div className="font-heading text-white text-base font-bold truncate">{participant.fullName}</div>
-              <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <span className={TIER_CLASS[tier]}>{tier}</span>
-                <span className="font-numbers text-[11px] text-text-secondary bg-white/5 px-2 py-0.5 rounded">
-                  {participant.participantId}
-                </span>
-                {participant.foundingMember && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gold/10 border border-gold/30 text-gold text-[10px] font-medium">
-                    <Crown size={10} /> Founding Member #{participant.foundingRank}
+      {/* ── ROW 1: Identity card (single card) ── */}
+      <Card title="Identity" icon={User}>
+        <div className="flex items-center gap-5">
+          <div className="relative shrink-0">
+            <div className={`w-20 h-20 rounded-full bg-neon-cyan/10 overflow-hidden flex items-center justify-center ${participant.foundingMember ? 'founding-avatar' : 'border-2 border-neon-cyan/30'}`}>
+              {participant.photoURL
+                ? <img src={participant.photoURL} alt="" className="w-full h-full object-cover" />
+                : <span className={`font-heading text-3xl font-bold ${participant.foundingMember ? 'text-gold' : 'text-neon-cyan'}`}>
+                    {participant.fullName.charAt(0).toUpperCase()}
                   </span>
-                )}
-              </div>
-              <div className="text-text-secondary text-[11px] mt-1.5">{participant.college}</div>
-              <div className="text-text-secondary/60 text-[10px]">{participant.branch} · {participant.year}</div>
+              }
             </div>
+            <button onClick={() => fileRef.current?.click()} disabled={uploading}
+              className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-neon-cyan text-midnight flex items-center justify-center hover:bg-neon-cyan/80 transition-colors shadow-md">
+              <Camera size={12} />
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
           </div>
-          <div className="grid grid-cols-3 gap-2 pt-3 border-t border-neon-cyan/10">
-            {[
-              { label: 'Rating',   value: participant.rating,               color: 'text-neon-cyan'     },
-              { label: 'Contests', value: participant.contestsParticipated, color: 'text-electric-blue' },
-              { label: 'Badges',   value: participant.badges?.length ?? 0,  color: 'text-gold'          },
-            ].map(s => (
-              <div key={s.label} className="text-center">
-                <div className={`stat-number text-xl ${s.color}`}>{s.value}</div>
-                <div className="text-text-secondary/60 text-[10px] uppercase tracking-wider mt-0.5">{s.label}</div>
-              </div>
-            ))}
-          </div>
-          <div>
-            <div className="flex justify-between text-[10px] text-text-secondary/50 mb-1">
-              <span>Progress to {TIER_NEXT_NAME[tier] ?? 'Max'}</span>
-              <span className="text-neon-cyan font-numbers">{rPct}%</span>
+          <div className="min-w-0">
+            <div className="font-heading text-white text-base font-bold truncate">{participant.fullName}</div>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <span className={TIER_CLASS[tier]}>{tier}</span>
+              <span className="font-numbers text-[11px] text-text-secondary bg-white/5 px-2 py-0.5 rounded">
+                {participant.participantId}
+              </span>
+              {participant.foundingMember && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-gold/10 border border-gold/30 text-gold text-[10px] font-medium">
+                  <Crown size={10} /> Founding Member #{participant.foundingRank}
+                </span>
+              )}
             </div>
-            <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-              <div className="h-full bg-neon-cyan rounded-full transition-all duration-700" style={{ width: `${rPct}%` }} />
-            </div>
+            <div className="text-text-secondary text-[11px] mt-1.5">{participant.college}</div>
+            <div className="text-text-secondary/60 text-[10px]">{participant.branch} · {participant.year}</div>
           </div>
-        </Card>
+        </div>
+        <div className="grid grid-cols-3 gap-2 pt-3 border-t border-neon-cyan/10">
+          {[
+            { label: 'Rating',   value: participant.rating,               color: 'text-neon-cyan'     },
+            { label: 'Contests', value: participant.contestsParticipated, color: 'text-electric-blue' },
+            { label: 'Badges',   value: participant.badges?.length ?? 0,  color: 'text-gold'          },
+          ].map(s => (
+            <div key={s.label} className="text-center">
+              <div className={`stat-number text-xl ${s.color}`}>{s.value}</div>
+              <div className="text-text-secondary/60 text-[10px] uppercase tracking-wider mt-0.5">{s.label}</div>
+            </div>
+          ))}
+        </div>
+        <div>
+          <div className="flex justify-between text-[10px] text-text-secondary/50 mb-1">
+            <span>Progress to {TIER_NEXT_NAME[tier] ?? 'Max'}</span>
+            <span className="text-neon-cyan font-numbers">{rPct}%</span>
+          </div>
+          <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div className="h-full bg-neon-cyan rounded-full transition-all duration-700" style={{ width: `${rPct}%` }} />
+          </div>
+        </div>
+      </Card>
 
-        {/* ── Founding Member Badge Card ── */}
-        {participant.foundingMember && (
+      {/* ── ROW 2: Founding Member Badge + Badges Earned (side by side) ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">{participant.foundingMember && (
           <Card title="Founding Member" icon={Crown} className="border-gold/20">
             <div className="flex flex-col items-center text-center">
               <FoundingMemberBadge size={160} />
@@ -252,7 +250,7 @@ export default function MyProfile() {
         </Card>
       </div>
 
-      {/* ── ROW 2: Account Details + Bio ── */}
+      {/* ── ROW 3: Account Details + Bio ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
         <Card title="Account Details" icon={GraduationCap}>
@@ -331,7 +329,7 @@ export default function MyProfile() {
         </Card>
       </div>
 
-      {/* ── ROW 3: Competitive Profiles ── */}
+      {/* ── ROW 4: Competitive Profiles ── */}
       <Card title="Competitive Profiles & Handles" icon={Code2}>
         <div className="flex items-center justify-between -mt-1 mb-1">
           <p className="text-[11px] text-text-secondary/60">

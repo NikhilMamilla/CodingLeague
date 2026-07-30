@@ -41,7 +41,7 @@ export default function LoginNotifications() {
     if (checked) return;
     const p = participant;
 
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = sessionStorage.getItem(STORAGE_KEY);
     // First time: look back 7 days so users don't get flooded with old items.
     const lastCheck = stored
       ? new Date(stored)
@@ -130,7 +130,7 @@ export default function LoginNotifications() {
 
   function handleClose() {
     setOpen(false);
-    localStorage.setItem(STORAGE_KEY, new Date().toISOString());
+    // Don't update localStorage so notification shows again on next login
   }
 
   const grouped = useMemo(() => {
@@ -211,7 +211,10 @@ export default function LoginNotifications() {
 
         {/* Footer */}
         <div className="p-5 border-t border-white/5 bg-white/[0.02]">
-          <button onClick={handleClose} className="btn-primary w-full text-xs">
+          <button onClick={() => {
+            handleClose();
+            sessionStorage.setItem(STORAGE_KEY, new Date().toISOString());
+          }} className="btn-primary w-full text-xs">
             Got it
           </button>
         </div>

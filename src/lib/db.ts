@@ -424,3 +424,142 @@ export async function updateSponsor(id: string, updates: Partial<Sponsor>): Prom
   if (updates.isActive   !== undefined) row.is_active   = updates.isActive;
   await supabase.from('sponsors').update(row).eq('id', id);
 }
+
+// ── Admin Utility: Fix duplicate IDs ─────────────────────────────────────────
+
+/**
+ * Removes the duplicate participant at ID 255 (keeps 254) and
+ * renumbers every participant whose numeric ID ≥ 255 down by 1,
+ * so the total stays contiguous and ends at 260.
+ *
+ * participant_id format: "CBB000NNN"  (prefix + zero-padded number)
+ */
+export async function fixDuplicateAndRenumber(
+  duplicateIdToDelete: string,        // e.g. "CBB000255"
+  renumberFromNum: number,            // e.g. 255  (>= this get shifted -1)
+  prefix: string = 'CBB',
+  padLength: number = 6,
+): Promise<{ deleted: string; updated: number }> {
+
+  // 1. Delete the duplicate record
+  const { error: delErr } = await supabase
+    .from('participants')
+    .delete()
+    .eq('participant_id', duplicateIdToDelete);
+
+  if (delErr) throw new Error(`Delete failed: ${delErr.message}`);
+
+  // 2. Fetch all participants whose numeric ID >= renumberFromNum
+  const { data, error: fetchErr } = await supabase
+    .from('participants')
+    .select('uid, participant_id')
+    .order('participant_id', { ascending: true });
+
+  if (fetchErr) throw new Error(`Fetch failed: ${fetchErr.message}`);
+
+  const toUpdate = (data ?? []).filter(row => {
+    const raw = row.participant_id as string | null;
+    if (!raw) return false;
+    const num = parseInt(raw.replace(/\D/g, ''), 10);
+    return !isNaN(num) && num >= renumberFromNum;
+  });
+
+  // 3. Renumber each one down by 1
+  let updated = 0;
+  for (const row of toUpdate) {
+    const oldNum = parseInt((row.participant_id as string).replace(/\D/g, ''), 10);
+    const newNum = oldNum - 1;
+    const newId  = `${prefix}${String(newNum).padStart(padLength, '0')}`;
+    const { error: upErr } = await supabase
+      .from('participants')
+      .update({ participant_id: newId })
+      .eq('uid', row.uid);
+    if (upErr) throw new Error(`Update ${row.participant_id} → ${newId} failed: ${upErr.message}`);
+    updated++;
+  }
+
+  // 4. Update the counter so new registrations get the right next ID
+  await supabase
+    .from('counters')
+    .upsert({ id: 'participant_id', value: renumberFromNum - 1 + toUpdate.length }, { onConflict: 'id' });
+
+  return { deleted: duplicateIdToDelete, updated };
+}
+
+/**
+ * Rename a single participant ID and update the counter.
+ * Use case: After deduplication, CBB000261 needs to become CBB000260,
+ * and counter needs to be set to 260.
+ */
+export async function renameParticipantId(
+  oldId: string,
+  newId: string,
+  counterValue: number,
+): Promise<void> {
+  // 1. Update the participant_id
+  const { error: updateErr } = await supabase
+    .from('participants')
+    .update({ participant_id: newId })
+    .eq('participant_id', oldId);
+
+  if (updateErr) throw new Error(`Failed to rename ${oldId} → ${newId}: ${updateErr.message}`);
+
+  // 2. Set the counter
+  await supabase
+    .from('counters')
+    .upsert({ id: 'participant_id', value: counterValue }, { onConflict: 'id' });
+}
+
+/**
+ * Compacts all participant IDs to be sequential 1..N with no gaps.
+ * Finds all numeric IDs, sorts them, renumbers to fill gaps.
+ * Sets the counter to the new max.
+ * ONLY processes IDs that start with the given prefix.
+ */
+export async function compactParticipantIds(
+  prefix: string = 'CBB',
+  padLength: number = 6,
+): Promise<{ renamed: number; newMax: number }> {
+  
+  // 1. Fetch all participants
+  const { data, error } = await supabase
+    .from('participants')
+    .select('uid, participant_id')
+    .order('participant_id', { ascending: true });
+
+  if (error) throw new Error(`Fetch failed: ${error.message}`);
+
+  // 2. Extract ONLY IDs that start with the prefix, then extract numeric part and sort
+  const rows = (data ?? [])
+    .map(row => ({
+      uid: row.uid,
+      oldId: row.participant_id as string,
+      num: parseInt((row.participant_id as string || '').replace(/\D/g, ''), 10),
+    }))
+    .filter(r => r.oldId?.startsWith(prefix) && !isNaN(r.num))  // ONLY CBB IDs
+    .sort((a, b) => a.num - b.num);
+
+  // 3. Renumber sequentially starting from 1
+  let renamed = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const newNum = i + 1;
+    const newId = `${prefix}${String(newNum).padStart(padLength, '0')}`;
+    if (rows[i].oldId !== newId) {
+      const { error: upErr } = await supabase
+        .from('participants')
+        .update({ participant_id: newId })
+        .eq('uid', rows[i].uid);
+      if (upErr) throw new Error(`Update ${rows[i].oldId} → ${newId} failed: ${upErr.message}`);
+      renamed++;
+    }
+  }
+
+  const newMax = rows.length;
+
+  // 4. Update counter to new max
+  await supabase
+    .from('counters')
+    .upsert({ id: 'participant_id', value: newMax }, { onConflict: 'id' });
+
+  return { renamed, newMax };
+}
