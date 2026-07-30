@@ -80,8 +80,8 @@ export default function Home() {
 
               {/* CTA buttons */}
               <div className="flex flex-row items-center justify-center lg:justify-start gap-2 w-full sm:w-auto">
-                <Link to="/register"    className="btn-primary   text-[10px] sm:text-sm px-4 sm:px-8 py-2">Register Now</Link>
-                <Link to="/leaderboard" className="btn-secondary text-[10px] sm:text-sm px-4 sm:px-8 py-2">Leaderboard</Link>
+                <Link to="/register" className="btn-primary   text-[10px] sm:text-sm px-4 sm:px-8 py-2">Register Now</Link>
+                <Link to="/login"    className="btn-secondary text-[10px] sm:text-sm px-4 sm:px-8 py-2">Login</Link>
               </div>
 
 
