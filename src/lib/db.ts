@@ -125,7 +125,7 @@ export function rowToCertificate(r: any): Certificate {
 }
 
 export function rowToAnnouncement(r: any): Announcement & { id: string } {
-  return { id: r.id, title: r.title, body: r.body, category: r.category, createdBy: r.created_by, createdAt: r.created_at };
+  return { id: r.id, title: r.title, body: r.body, category: r.category, createdBy: r.created_by, createdAt: r.created_at, attachments: r.attachments ?? [] };
 }
 
 export function rowToSponsor(r: any): Sponsor {
@@ -356,6 +356,7 @@ export async function insertAnnouncement(a: Omit<Announcement, 'id'>): Promise<s
   const { data } = await supabase.from('announcements').insert({
     title: a.title, body: a.body, category: a.category,
     created_by: a.createdBy, created_at: new Date().toISOString(),
+    attachments: a.attachments ?? [],
   }).select('id').single();
   return data?.id ?? '';
 }

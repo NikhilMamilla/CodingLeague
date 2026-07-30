@@ -3,11 +3,12 @@ import type { Participant } from '../../types';
 import { BADGE_META } from '../../types';
 import {
   Search, User, GraduationCap, Mail, Phone, MapPin, Code2,
-  X, Shield, ExternalLink, Link2, Trash2, Wrench,
+  X, Shield, ExternalLink, Link2, Trash2, Wrench, BookOpen,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getCanonicalProfileUrl } from '../../lib/profileVerification';
 import { getParticipantsLatestFirst, deleteParticipant, compactParticipantIds } from '../../lib/db';
+import { supabase } from '../../lib/supabase';
 
 const TIER_CLASS: Record<string, string> = {
   Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
@@ -28,6 +29,10 @@ export default function ManageUsers() {
   const [search,  setSearch]  = useState('');
   const [viewing, setViewing] = useState<Participant | null>(null);
   const [fixing,  setFixing]  = useState(false);
+  const [showNormalize, setShowNormalize] = useState(false);
+  const [collegeSearch, setCollegeSearch] = useState('');
+  const [renameMap, setRenameMap] = useState<Record<string, string>>({});
+  const [renamingCollege, setRenamingCollege] = useState<string | null>(null);
 
   useEffect(() => {
     getParticipantsLatestFirst(500).then(data => {
@@ -73,6 +78,49 @@ export default function ManageUsers() {
     }
   }
 
+  // Build college → count map from loaded participants
+  const collegeCounts: Record<string, number> = {};
+  for (const p of participants) {
+    const name = p.college?.trim() || '(blank)';
+    collegeCounts[name] = (collegeCounts[name] ?? 0) + 1;
+  }
+  const sortedColleges = Object.entries(collegeCounts)
+    .sort((a, b) => b[1] - a[1]);
+
+  async function handleRenameCollege(oldName: string) {
+    const newName = (renameMap[oldName] ?? '').trim();
+    if (!newName || newName === oldName) { toast.error('Enter a different new name'); return; }
+    setRenamingCollege(oldName);
+    try {
+      const lookupName = oldName === '(blank)' ? '' : oldName;
+      const { error } = await supabase
+        .from('participants')
+        .update({ college: newName })
+        .eq('college', lookupName);
+      if (error) throw new Error(error.message);
+      // Update local state
+      setParticipants(prev =>
+        prev.map(p =>
+          (p.college?.trim() || '') === lookupName ? { ...p, college: newName } : p
+        )
+      );
+      setRenameMap(prev => {
+        const next = { ...prev };
+        delete next[oldName];
+        return next;
+      });
+      toast.success(`Renamed "${oldName === '(blank)' ? '(blank)' : oldName}" → "${newName}"`);
+    } catch (e: any) {
+      toast.error('Rename failed: ' + (e.message ?? 'Unknown error'));
+    } finally {
+      setRenamingCollege(null);
+    }
+  }
+
+  const filteredColleges = sortedColleges.filter(([name]) =>
+    !collegeSearch || name.toLowerCase().includes(collegeSearch.toLowerCase())
+  );
+
   const filtered = participants.filter(p =>
     !search ||
     p.fullName?.toLowerCase().includes(search.toLowerCase()) ||
@@ -102,6 +150,13 @@ export default function ManageUsers() {
               {fixing ? 'Compacting…' : 'Compact All IDs (Close Gaps)'}
             </button>
           )}
+          <button
+            onClick={() => { setCollegeSearch(''); setRenameMap({}); setShowNormalize(true); }}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-neon-cyan/30 bg-neon-cyan/10 text-neon-cyan hover:bg-neon-cyan/20 text-xs font-medium transition-colors"
+          >
+            <BookOpen size={12} />
+            Normalize Colleges
+          </button>
           <div className="relative w-full sm:w-72">
             <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/50" />
             <input className="input-field pl-9 py-2 text-xs" placeholder="Search name, email, college, ID…"
@@ -373,6 +428,81 @@ export default function ManageUsers() {
                 )}
               </section>
 
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Normalize Colleges Modal ── */}
+      {showNormalize && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={e => { if (e.target === e.currentTarget) setShowNormalize(false); }}
+        >
+          <div className="bg-midnight border border-neon-cyan/20 rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto no-scrollbar shadow-[0_0_40px_rgba(0,229,255,0.12)]">
+
+            {/* Header */}
+            <div className="sticky top-0 z-10 bg-midnight/95 border-b border-neon-cyan/10 px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-neon-cyan/10 flex items-center justify-center">
+                  <BookOpen size={13} className="text-neon-cyan" />
+                </div>
+                <div>
+                  <h2 className="font-heading text-sm font-bold text-neon-cyan">Normalize Colleges</h2>
+                  <p className="text-text-secondary/60 text-[10px] mt-0.5">{sortedColleges.length} unique college names · {participants.length} total participants</p>
+                </div>
+              </div>
+              <button onClick={() => setShowNormalize(false)} className="text-text-secondary hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+
+              {/* Search */}
+              <div className="relative">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary/50" />
+                <input
+                  className="input-field pl-9 py-2 text-xs"
+                  placeholder="Filter college names…"
+                  value={collegeSearch}
+                  onChange={e => setCollegeSearch(e.target.value)}
+                />
+              </div>
+
+              {/* College list */}
+              <div className="space-y-2">
+                {filteredColleges.length === 0 ? (
+                  <p className="text-text-secondary/50 text-xs text-center py-8">No colleges match your filter.</p>
+                ) : filteredColleges.map(([name, count]) => (
+                  <div key={name} className="card p-3">
+                    <div className="flex items-center justify-between mb-2 gap-3 flex-wrap">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <GraduationCap size={12} className="text-neon-cyan shrink-0" />
+                        <span className="text-white text-xs font-medium truncate">{name}</span>
+                        <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-neon-cyan/10 text-neon-cyan font-numbers">
+                          {count} student{count !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="input-field text-xs py-2 flex-1"
+                        placeholder="New name…"
+                        value={renameMap[name] ?? ''}
+                        onChange={e => setRenameMap(prev => ({ ...prev, [name]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') handleRenameCollege(name); }}
+                      />
+                      <button
+                        onClick={() => handleRenameCollege(name)}
+                        disabled={renamingCollege === name || !(renameMap[name] ?? '').trim()}
+                        className="btn-primary text-xs px-3 py-2 shrink-0 disabled:opacity-50"
+                      >
+                        {renamingCollege === name ? 'Renaming…' : 'Rename All'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

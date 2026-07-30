@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Award, FileText, X, Sparkles, Crown } from 'lucide-react';
+import { Award, FileText, X, Sparkles, Crown, Megaphone } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import type { Badge } from '../types';
 import { BADGE_META } from '../types';
-import { getCertificatesByParticipant } from '../lib/db';
+import { getCertificatesByParticipant, getAnnouncements } from '../lib/db';
 
 interface NotificationItem {
   id: string;
-  type: 'badge' | 'certificate' | 'founding';
+  type: 'badge' | 'certificate' | 'founding' | 'announcement';
   title: string;
   subtitle: string;
   awardedAt: string;
@@ -110,6 +110,24 @@ export default function LoginNotifications() {
         });
       } catch { /* ignore */ }
 
+      // ── Announcements ──
+      try {
+        const ann = await getAnnouncements(20);
+        ann.forEach((a) => {
+          const postedAt = parseDate(a.createdAt);
+          if (!postedAt || postedAt <= lastCheck) return;
+          notifications.push({
+            id: `ann-${a.id}`,
+            type: 'announcement',
+            title: a.title,
+            subtitle: a.category,
+            awardedAt: a.createdAt,
+            icon: <Megaphone size={18} className="text-warning" />,
+            link: '/dashboard/announcements',
+          });
+        });
+      } catch { /* ignore */ }
+
       // Sort newest first.
       notifications.sort((a, b) => {
         const da = parseDate(a.awardedAt);
@@ -137,6 +155,7 @@ export default function LoginNotifications() {
     return {
       badges: items.filter(i => i.type === 'badge' || i.type === 'founding'),
       certificates: items.filter(i => i.type === 'certificate'),
+      announcements: items.filter(i => i.type === 'announcement'),
     };
   }, [items]);
 
@@ -194,6 +213,27 @@ export default function LoginNotifications() {
                 {grouped.certificates.map(item => (
                   <Link key={item.id} to={item.link} onClick={handleClose}
                     className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 hover:border-neon-cyan/30 transition-colors">
+                    <div className="w-10 h-10 rounded-lg bg-midnight border border-white/10 flex items-center justify-center shrink-0">
+                      {item.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-white text-xs font-medium truncate">{item.title}</div>
+                      <div className="text-text-secondary/60 text-[10px] truncate">{item.subtitle}</div>
+                    </div>
+                    <ChevronRightMini />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {grouped.announcements.length > 0 && (
+            <div>
+              <h3 className="text-[10px] uppercase tracking-wider text-text-secondary/70 mb-2">New Announcements</h3>
+              <div className="space-y-2">
+                {grouped.announcements.map(item => (
+                  <Link key={item.id} to={item.link} onClick={handleClose}
+                    className="flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 hover:border-warning/30 transition-colors">
                     <div className="w-10 h-10 rounded-lg bg-midnight border border-white/10 flex items-center justify-center shrink-0">
                       {item.icon}
                     </div>

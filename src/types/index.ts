@@ -245,6 +245,13 @@ export type AnnouncementCategory =
   | 'Recruitment'
   | 'Sponsors';
 
+export interface AnnouncementAttachment {
+  url: string;
+  name: string;
+  type: 'image' | 'pdf' | 'file';
+  size?: number;
+}
+
 export interface Announcement {
   id: string;
   title: string;
@@ -252,6 +259,7 @@ export interface Announcement {
   category: AnnouncementCategory;
   createdBy: string;
   createdAt: string;
+  attachments?: AnnouncementAttachment[];
 }
 
 // ─── Certificate ──────────────────────────────────────────────────────────────

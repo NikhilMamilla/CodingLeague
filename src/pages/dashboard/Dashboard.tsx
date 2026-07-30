@@ -4,7 +4,7 @@ import {
   TrendingUp, Trophy, Calendar, Award, Zap,
   Star, Code2, ExternalLink, User, ChevronRight,
   Megaphone, Crown, Info, Users, Send,
-  Sparkles, Download,
+  Sparkles, Download, BookOpen, Target,
 } from 'lucide-react';
 import { downloadFoundingCertificate } from '../../lib/certificateGenerator';
 import { useAuth } from '../../contexts/AuthContext';
@@ -13,6 +13,7 @@ import { BADGE_META } from '../../types';
 import toast from 'react-hot-toast';
 import { getContests, getParticipants, getAnnouncements, getSetting, getResultsByParticipant } from '../../lib/db';
 import { supabase } from '../../lib/supabase';
+import { getCurrentWeekBlock, getNextWeekBlock, PRACTICE_LINKS } from '../../lib/weekTopics';
 
 const TIER_CFG: Record<string, { cls: string; next: number; min: number; nextName: string }> = {
   Beginner:               { cls: 'text-gray-400 font-semibold',    next: 900,   min: 800,  nextName: 'Explorer'              },
@@ -117,6 +118,9 @@ export default function Dashboard() {
   const [loadingLeader,   setLoadingLeader]   = useState(true);
   const [myRank,          setMyRank]          = useState<number | null>(null);
   const [announcementWhatsapp, setAnnouncementWhatsapp] = useState('');
+  const [whatsappDismissed, setWhatsappDismissed] = useState(() =>
+    sessionStorage.getItem('cwcl_wa_banner_dismissed') === 'true'
+  );
   const [foundingSlots, setFoundingSlots] = useState<FoundingSlotState>({ enabled: false, claimed: 0, max: 20, seasonLabel: '2026–27' });
 
   useEffect(() => {
@@ -269,8 +273,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Community Banner (Always shown after stat cards) ── */}
-      {announcementWhatsapp && (
+      {/* ── Community Banner (once per session, dismissible) ── */}
+      {announcementWhatsapp && !whatsappDismissed && (
         <div className="relative bg-card-dark border border-neon-cyan/25 rounded-xl p-4 md:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="flex items-start gap-3 flex-1">
             <div className="w-9 h-9 rounded-lg bg-neon-cyan/10 border border-neon-cyan/30 flex items-center justify-center shrink-0 mt-0.5">
@@ -288,11 +292,19 @@ export default function Dashboard() {
             >
               <Send size={11} /> Join Now
             </a>
+            <button
+              onClick={() => {
+                setWhatsappDismissed(true);
+                sessionStorage.setItem('cwcl_wa_banner_dismissed', 'true');
+              }}
+              className="text-text-secondary/50 hover:text-white p-1.5 transition-colors"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
           </div>
         </div>
       )}
-
-      {/* ── Stat Grid ── */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard
           icon={TrendingUp}
@@ -335,6 +347,91 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      {(() => {
+        const current = getCurrentWeekBlock();
+        const next    = getNextWeekBlock();
+        const display = current ?? next;
+        if (!display) return null;
+        const links = PRACTICE_LINKS[display.topic];
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* This Week Card */}
+            <div className="lg:col-span-2 card border-neon-cyan/30 bg-neon-cyan/[0.02]">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center">
+                    <BookOpen size={13} className="text-neon-cyan" />
+                  </div>
+                  <h2 className="heading-sm !text-sm">
+                    {current ? "This Week's Topic" : "Next Up"}
+                  </h2>
+                </div>
+                <Link to="/dashboard/roadmap" className="text-neon-cyan text-xs hover:underline flex items-center gap-1">
+                  Full Roadmap <ChevronRight size={11} />
+                </Link>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="text-4xl shrink-0">{display.icon}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-heading text-white text-base font-bold leading-tight">{display.topic}</div>
+                  <div className="text-text-secondary/60 text-[11px] mt-0.5">
+                    Week {display.weeks} · Contest {display.contests} · {display.dateRange}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {display.focusAreas.map(f => (
+                      <span key={f} className="text-[10px] px-2 py-0.5 rounded-full bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan/80">
+                        {f}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {links && (
+                <div className="flex items-center gap-2 mt-4 pt-3 border-t border-white/5">
+                  <span className="text-[10px] text-text-secondary/50 uppercase tracking-wider mr-1">Practice Now:</span>
+                  {links.leetcode && (
+                    <a href={links.leetcode} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFA116]/10 border border-[#FFA116]/20 text-[#FFA116] text-[11px] font-medium hover:bg-[#FFA116]/20 transition-colors">
+                      LeetCode <ExternalLink size={10} />
+                    </a>
+                  )}
+                  {links.gfg && (
+                    <a href={links.gfg} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2F8D46]/10 border border-[#2F8D46]/20 text-[#2F8D46] text-[11px] font-medium hover:bg-[#2F8D46]/20 transition-colors">
+                      GeeksforGeeks <ExternalLink size={10} />
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Season Progress card */}
+            <div className="card">
+              <div className="flex items-center gap-2 mb-4">
+                <Target size={14} className="text-neon-cyan" />
+                <h2 className="heading-sm !text-sm">Season Progress</h2>
+              </div>
+              <div className="space-y-3">
+                {[
+                  { label: 'Total Contests', value: '57', color: 'text-neon-cyan' },
+                  { label: 'Topic Weeks',    value: '27', color: 'text-electric-blue' },
+                  { label: 'Every Saturday', value: '🗓️', color: 'text-warning'       },
+                  { label: 'Season Ends',    value: 'Aug 7, 2027', color: 'text-gold' },
+                ].map(s => (
+                  <div key={s.label} className="flex items-center justify-between">
+                    <span className="text-[11px] text-text-secondary/60">{s.label}</span>
+                    <span className={`text-xs font-numbers font-bold ${s.color}`}>{s.value}</span>
+                  </div>
+                ))}
+              </div>
+              <Link to="/dashboard/roadmap"
+                className="mt-4 w-full flex items-center justify-center gap-1 text-[10px] text-text-secondary hover:text-neon-cyan transition-colors border border-white/5 rounded-lg py-2">
+                <BookOpen size={10} /> View Full Roadmap
+              </Link>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Upcoming Contest + Competitive Profiles ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

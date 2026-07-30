@@ -4,7 +4,7 @@ import { storage } from '../../lib/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import {
   Camera, Save, ExternalLink, Code2, User,
-  GraduationCap, MapPin, Phone, Mail, Shield, Link, Crown, Star,
+  GraduationCap, MapPin, Phone, Mail, Shield, Link, Crown, Star, Lock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { BADGE_META } from '../../types';
@@ -67,7 +67,17 @@ export default function MyProfile() {
   });
   const [uploading, setUploading] = useState(false);
   const [saving,    setSaving]    = useState(false);
+  const [savingDetails, setSavingDetails] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Editable account detail fields
+  const [college,    setCollege]    = useState(participant?.college    ?? '');
+  const [university, setUniversity] = useState(participant?.university ?? '');
+  const [branch,     setBranch]     = useState(participant?.branch     ?? '');
+  const [year,       setYear]       = useState(participant?.year       ?? '');
+  const [city,       setCity]       = useState(participant?.city       ?? '');
+  const [state,      setState]      = useState(participant?.state      ?? '');
+  const [phone,      setPhone]      = useState(participant?.phone      ?? '');
 
   useEffect(() => {
     if (!participant) return;
@@ -81,6 +91,13 @@ export default function MyProfile() {
       codeforcesHandle:   participant.codeforcesHandle   ?? '',
       gfgUsername:        participant.gfgUsername        ?? '',
     });
+    setCollege(participant.college    ?? '');
+    setUniversity(participant.university ?? '');
+    setBranch(participant.branch     ?? '');
+    setYear(participant.year         ?? '');
+    setCity(participant.city         ?? '');
+    setState(participant.state       ?? '');
+    setPhone(participant.phone       ?? '');
   }, [participant]);
 
   if (!participant || !user) return null;
@@ -132,6 +149,24 @@ export default function MyProfile() {
       toast.success('Profile saved with verified handles!');
     } catch { toast.error('Save failed'); }
     finally { setSaving(false); }
+  }
+
+  async function handleSaveDetails() {
+    setSavingDetails(true);
+    try {
+      await updateParticipant(user!.uid, {
+        college:    college.trim()    || null,
+        university: university.trim() || null,
+        branch:     branch.trim()     || null,
+        year:       year              || null,
+        city:       city.trim()       || null,
+        state:      state.trim()      || null,
+        phone:      phone.trim()      || null,
+      });
+      await refreshParticipant();
+      toast.success('Details saved!');
+    } catch { toast.error('Save failed'); }
+    finally { setSavingDetails(false); }
   }
 
   const tier = participant.tier;
@@ -255,30 +290,101 @@ export default function MyProfile() {
 
         <Card title="Account Details" icon={GraduationCap}>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-            {[
-              { icon: User,          label: 'Full Name',  value: participant.fullName   },
-              { icon: Mail,          label: 'Email',      value: participant.email      },
-              { icon: Phone,         label: 'Phone',      value: participant.phone      },
-              { icon: GraduationCap, label: 'College',    value: participant.college    },
-              { icon: GraduationCap, label: 'University', value: participant.university },
-              { icon: GraduationCap, label: 'Branch',     value: participant.branch     },
-              { icon: GraduationCap, label: 'Year',       value: participant.year       },
-              { icon: MapPin,        label: 'City',       value: participant.city       },
-              { icon: MapPin,        label: 'State',      value: participant.state      },
-            ].map(({ icon: Icon, label, value }) => (
-              <div key={label}>
-                <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
-                  <Icon size={10} className="shrink-0" /> {label}
-                </label>
-                <div className="w-full bg-white/5 border border-white/10 text-white rounded-lg px-3 py-2 text-xs truncate">
-                  {value ?? '—'}
-                </div>
+
+            {/* Full Name — locked */}
+            <div>
+              <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
+                <User size={10} className="shrink-0" /> Full Name
+                <span title="Contact support to update" className="ml-auto text-text-secondary/40 cursor-default"><Lock size={9} /></span>
+              </label>
+              <div className="w-full bg-white/5 border border-white/10 text-text-secondary/70 rounded-lg px-3 py-2 text-xs truncate">
+                {participant.fullName ?? '—'}
               </div>
-            ))}
+            </div>
+
+            {/* Email — locked */}
+            <div>
+              <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
+                <Mail size={10} className="shrink-0" /> Email
+                <span title="Contact support to update" className="ml-auto text-text-secondary/40 cursor-default"><Lock size={9} /></span>
+              </label>
+              <div className="w-full bg-white/5 border border-white/10 text-text-secondary/70 rounded-lg px-3 py-2 text-xs truncate">
+                {participant.email ?? '—'}
+              </div>
+            </div>
+
+            {/* College */}
+            <div>
+              <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
+                <GraduationCap size={10} className="shrink-0" /> College
+              </label>
+              <input className="input-field text-xs py-2" value={college} onChange={e => setCollege(e.target.value)} placeholder="College name" />
+            </div>
+
+            {/* University */}
+            <div>
+              <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
+                <GraduationCap size={10} className="shrink-0" /> University
+              </label>
+              <input className="input-field text-xs py-2" value={university} onChange={e => setUniversity(e.target.value)} placeholder="University name" />
+            </div>
+
+            {/* Branch */}
+            <div>
+              <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
+                <GraduationCap size={10} className="shrink-0" /> Branch
+              </label>
+              <input className="input-field text-xs py-2" value={branch} onChange={e => setBranch(e.target.value)} placeholder="e.g. CSE, ECE" />
+            </div>
+
+            {/* Year */}
+            <div>
+              <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
+                <GraduationCap size={10} className="shrink-0" /> Year
+              </label>
+              <select className="input-field text-xs py-2" value={year} onChange={e => setYear(e.target.value)}>
+                <option value="">Select year</option>
+                <option value="1st Year">1st Year</option>
+                <option value="2nd Year">2nd Year</option>
+                <option value="3rd Year">3rd Year</option>
+                <option value="4th Year">4th Year</option>
+              </select>
+            </div>
+
+            {/* City */}
+            <div>
+              <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
+                <MapPin size={10} className="shrink-0" /> City
+              </label>
+              <input className="input-field text-xs py-2" value={city} onChange={e => setCity(e.target.value)} placeholder="City" />
+            </div>
+
+            {/* State */}
+            <div>
+              <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
+                <MapPin size={10} className="shrink-0" /> State
+              </label>
+              <input className="input-field text-xs py-2" value={state} onChange={e => setState(e.target.value)} placeholder="State" />
+            </div>
+
+            {/* Phone */}
+            <div className="col-span-2">
+              <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
+                <Phone size={10} className="shrink-0" /> Phone
+              </label>
+              <input className="input-field text-xs py-2" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone number" />
+            </div>
+
           </div>
-          <p className="text-text-secondary/40 text-[10px] pt-2 border-t border-white/5">
-            Contact support to update personal details.
-          </p>
+
+          <button
+            onClick={handleSaveDetails}
+            disabled={savingDetails}
+            className="btn-primary w-full text-xs px-4 py-2.5 flex items-center justify-center gap-1.5 disabled:opacity-50 mt-2"
+          >
+            <Save size={13} />
+            {savingDetails ? 'Saving…' : 'Save Details'}
+          </button>
         </Card>
 
         <Card title="About Me & Social Links" icon={User}>

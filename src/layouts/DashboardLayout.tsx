@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 const LINKS = [
   { to: '/dashboard',              label: 'Overview',       icon: LayoutDashboard, end: true  },
   { to: '/dashboard/guide',        label: 'CWCL Guide',     icon: Compass,         end: false },
+  { to: '/dashboard/roadmap',      label: 'Topic Roadmap',  icon: BookOpen,        end: false },
   { to: '/dashboard/leaderboard',  label: 'Leaderboard',    icon: Trophy,          end: false },
   { to: '/dashboard/announcements',label: 'Announcements',  icon: Megaphone,       end: false },
   { to: '/dashboard/community',    label: 'Community',      icon: Users,           end: false },
