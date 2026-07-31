@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import React from 'react';
 import type { Participant } from '../../types';
 import { BADGE_META } from '../../types';
 import {
@@ -142,6 +143,13 @@ export default function ManageUsers() {
     p.participantId?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const PAGE_SIZE = 100;
+  const [page, setPage] = useState(0);
+  // Reset to page 0 when search changes
+  React.useEffect(() => { setPage(0); }, [search]);
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
   return (
     <div className="space-y-6">
 
@@ -197,7 +205,7 @@ export default function ManageUsers() {
                 <tr><td colSpan={8} className="text-center py-12 text-text-secondary">
                   {participants.length === 0 ? 'No participants yet.' : 'No results found.'}
                 </td></tr>
-              ) : filtered.map(p => (
+              ) : paginated.map(p => (
                 <tr key={p.uid} className="hover:bg-neon-cyan/5 transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
@@ -268,6 +276,29 @@ export default function ManageUsers() {
           </table>
         </div>
       </div>
+
+      {/* ── Pagination ── */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-1">
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-white/10 text-xs text-text-secondary hover:text-white hover:border-neon-cyan/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            ← Prev
+          </button>
+          <span className="text-[11px] text-text-secondary/60 font-numbers">
+            Page {page + 1} of {totalPages} · {filtered.length} participants
+          </span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-white/10 text-xs text-text-secondary hover:text-white hover:border-neon-cyan/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            Next →
+          </button>
+        </div>
+      )}
 
       {/* ── Participant Profile Modal ── */}
       {viewing && (
