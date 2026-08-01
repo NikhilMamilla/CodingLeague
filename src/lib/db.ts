@@ -281,6 +281,11 @@ export async function getResultsByParticipant(participantId: string): Promise<Co
   return (data ?? []).map(rowToResult);
 }
 
+export async function getResultsByContest(contestId: string): Promise<ContestResult[]> {
+  const { data } = await supabase.from('contest_results').select('*').eq('contest_id', contestId);
+  return (data ?? []).map(rowToResult);
+}
+
 export async function getAllResults(): Promise<ContestResult[]> {
   const { data } = await supabase.from('contest_results').select('*');
   return (data ?? []).map(rowToResult);

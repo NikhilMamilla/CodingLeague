@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import type { Certificate, Participant, CertificateType } from '../../types';
+import type { Certificate, Participant, CertificateType, Contest } from '../../types';
 import {
   Award, Plus, Search, Filter, Trash2, Eye, Download, Mail,
-  CheckCircle2, Clock, AlertTriangle, X, Loader2, Sparkles, Crown
+  CheckCircle2, Clock, AlertTriangle, X, Loader2, Sparkles, Crown, Zap
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { renderCertificate, downloadCertificate, type CertificateData } from '../../lib/certificateGenerator';
-import { getCertificates, getParticipants, upsertCertificate, deleteCertificate } from '../../lib/db';
+import { getCertificates, getParticipants, upsertCertificate, deleteCertificate, getContests, getResultsByContest } from '../../lib/db';
 
 const CERT_TYPES: CertificateType[] = [
   'Participation',
@@ -51,13 +51,19 @@ export default function ManageCertificates() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
 
+  // Contest-based bulk selection
+  const [contests, setContests] = useState<Contest[]>([]);
+  const [contestPickerOpen, setContestPickerOpen] = useState(false);
+  const [loadingContestParticipants, setLoadingContestParticipants] = useState(false);
+
   // Canvas refs for preview
   const modalCanvasRef = useRef<HTMLCanvasElement>(null);
   const inlineCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     getCertificates().then(list => { setCerts(list); setLoading(false); }).catch(() => setLoading(false));
-    getParticipants(2000).then(list => setParticipants(list)).catch(() => {});
+    getParticipants(0).then(list => setParticipants(list)).catch(() => {});
+    getContests().then(list => setContests(list.filter(c => c.status === 'Completed'))).catch(() => {});
   }, []);
 
   // Render canvas preview whenever previewCert state changes
@@ -180,6 +186,33 @@ export default function ManageCertificates() {
     } catch { toast.error('Failed to delete certificate'); }
   }
 
+  // Auto-select participants who attempted a specific contest from HackerRank results
+  async function handleSelectFromContest(contestId: string) {
+    setLoadingContestParticipants(true);
+    try {
+      const results = await getResultsByContest(contestId);
+      const participantIds = new Set(results.map(r => r.participantId).filter(Boolean));
+      const matchedUids = participants
+        .filter(p => participantIds.has(p.participantId))
+        .map(p => p.uid);
+      if (matchedUids.length === 0) {
+        toast.error('No matched participants found for this contest. Make sure results are imported.');
+        return;
+      }
+      setSelectedUids(matchedUids);
+      setCertType('Participation');
+      const contest = contests.find(c => c.id === contestId);
+      if (contest) setIssuedDateStr(contest.date);
+      setContestPickerOpen(false);
+      setShowCreateModal(true);
+      toast.success(`${matchedUids.length} participants auto-selected from contest results!`);
+    } catch {
+      toast.error('Failed to load contest results');
+    } finally {
+      setLoadingContestParticipants(false);
+    }
+  }
+
   // Filtered participants for selector
   const filteredParticipants = participants.filter(p => {
     const matchSearch = !participantSearch ||
@@ -210,6 +243,12 @@ export default function ManageCertificates() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setContestPickerOpen(true)}
+            className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5 bg-electric-blue/10 border-electric-blue/30 text-electric-blue hover:bg-electric-blue/20"
+          >
+            <Zap size={14} /> Bulk from Contest
+          </button>
           <button
             onClick={() => {
               const foundingUids = participants.filter((p) => p.foundingMember).map((p) => p.uid);
@@ -780,6 +819,48 @@ export default function ManageCertificates() {
                 Yes, Delete
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL 5: Contest Picker for Bulk Participation Certs ── */}
+      {contestPickerOpen && createPortal(
+        <div className="fixed inset-0 top-0 left-0 w-screen h-screen z-[9999] bg-[#070d1a]/95 backdrop-blur-xl flex items-center justify-center p-4">
+          <div className="card max-w-md w-full p-6 space-y-4 border-electric-blue/30 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="font-heading text-sm font-bold flex items-center gap-2 text-electric-blue">
+                <Zap size={16} /> Bulk Participation Certs from Contest
+              </h3>
+              <button onClick={() => setContestPickerOpen(false)} className="text-text-secondary hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-xs text-text-secondary">
+              Select a completed contest. Only participants who actually attempted it (from imported results) will be auto-selected.
+            </p>
+            {contests.length === 0 ? (
+              <p className="text-xs text-amber-400 text-center py-4">No completed contests found. Import results first.</p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {contests.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => handleSelectFromContest(c.id)}
+                    disabled={loadingContestParticipants}
+                    className="w-full text-left p-3 rounded-lg border border-white/10 hover:border-electric-blue/40 hover:bg-electric-blue/5 transition-all disabled:opacity-50"
+                  >
+                    <div className="text-white text-xs font-semibold">{c.name}</div>
+                    <div className="text-text-secondary text-[10px] mt-0.5">{c.date} · {c.platform || c.mode}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {loadingContestParticipants && (
+              <div className="flex items-center justify-center gap-2 text-xs text-neon-cyan">
+                <Loader2 size={14} className="animate-spin" /> Loading participants…
+              </div>
+            )}
           </div>
         </div>,
         document.body
