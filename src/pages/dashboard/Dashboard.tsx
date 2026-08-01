@@ -117,6 +117,7 @@ export default function Dashboard() {
   const [loadingContest,  setLoadingContest]  = useState(true);
   const [loadingLeader,   setLoadingLeader]   = useState(true);
   const [myRank,          setMyRank]          = useState<number | null>(null);
+  const [allRanked,       setAllRanked]       = useState<LeaderRow[]>([]);
   const [announcementWhatsapp, setAnnouncementWhatsapp] = useState('');
   const [whatsappDismissed, setWhatsappDismissed] = useState(() =>
     sessionStorage.getItem('cwcl_wa_banner_dismissed') === 'true'
@@ -134,13 +135,10 @@ export default function Dashboard() {
     }).catch(() => setLoadingContest(false));
 
     // Leaderboard - only top 10 for overview
-    getParticipants(200).then(all => {
-      const filtered = all.filter(r => r.role !== 'admin' && r.role !== 'super_admin');
-      setLeaderboard(filtered.slice(0, 10) as LeaderRow[]);
-      if (participant) {
-        const idx = filtered.findIndex(r => r.uid === participant.uid);
-        setMyRank(idx !== -1 ? idx + 1 : null);
-      }
+    getParticipants(0).then(all => {
+      const filtered = all.filter(r => r.role !== 'admin' && r.role !== 'super_admin') as LeaderRow[];
+      setLeaderboard(filtered.slice(0, 10));
+      setAllRanked(filtered);
       setLoadingLeader(false);
     }).catch(() => setLoadingLeader(false));
 
@@ -172,6 +170,13 @@ export default function Dashboard() {
         .catch(() => {});
     }
   }, [participant?.uid]);
+
+  // Recompute rank whenever the full ranked list or participant changes
+  useEffect(() => {
+    if (!participant || allRanked.length === 0) return;
+    const idx = allRanked.findIndex(r => r.uid === participant.uid);
+    setMyRank(idx !== -1 ? idx + 1 : null);
+  }, [allRanked, participant?.uid]);
 
   if (!participant) return (
     <div className="flex items-center justify-center h-64">

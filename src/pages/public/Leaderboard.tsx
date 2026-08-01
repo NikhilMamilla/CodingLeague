@@ -14,7 +14,7 @@ export default function Leaderboard() {
   const [page, setPage]                 = useState(1);
 
   useEffect(() => {
-    getParticipants(500).then(list => {
+    getParticipants(0).then(list => {
       setParticipants(list.filter(p => p.role !== 'admin' && p.role !== 'super_admin'));
       setLoading(false);
     }).catch(() => setLoading(false));

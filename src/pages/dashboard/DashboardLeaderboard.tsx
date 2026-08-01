@@ -44,7 +44,7 @@ export default function DashboardLeaderboard() {
   const [search,  setSearch]  = useState('');
 
   useEffect(() => {
-    getParticipants(200).then(data => {
+    getParticipants(0).then(data => {
       setRows(data
         .filter(p => p.role !== 'admin' && p.role !== 'super_admin')
         .map((p, i) => ({
@@ -249,8 +249,9 @@ function FullTable({ rows, myUid }: { rows: LeaderRow[]; myUid?: string }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            {pageRows.map(r => {
+            {pageRows.map((r, i) => {
               const isMe = r.uid === myUid;
+              const displayRank = page * PAGE_SIZE + i + 1;
               return (
                 <tr key={r.uid}
                   className={`transition-colors ${isMe
@@ -258,7 +259,7 @@ function FullTable({ rows, myUid }: { rows: LeaderRow[]; myUid?: string }) {
                     : 'hover:bg-white/5'
                   }`}>
                   <td className="py-3 px-3">
-                    <RankBadge rank={r.rank} />
+                    <RankBadge rank={displayRank} />
                   </td>
                   <td className="py-3 px-3">
                     <div className="flex items-center gap-2.5">

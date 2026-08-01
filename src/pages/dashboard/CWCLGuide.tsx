@@ -51,7 +51,7 @@ export default function CWCLGuide() {
 
   useEffect(() => {
     if (!participant) return;
-    getParticipants(500).then(all => {
+    getParticipants(0).then(all => {
       const nonAdmin = all.filter(p => p.role !== 'admin' && p.role !== 'super_admin');
       const idx = nonAdmin.findIndex(p => p.uid === participant.uid);
       setOverallRank(idx !== -1 ? idx + 1 : null);

@@ -52,6 +52,57 @@ export default function ManageContests() {
     getContests().then(list => { setContests(list); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
+  // ── Auto status transitions ────────────────────────────────────────────────
+  // Checks every 30 seconds:
+  //   Upcoming  → Active    when current time >= contest date + startTime
+  //   Active    → Completed when current time >= contest date + endTime
+  useEffect(() => {
+    async function checkAndTransition() {
+      const now = new Date();
+
+      setContests(prev => {
+        const toUpdate: { id: string; newStatus: 'Active' | 'Completed' }[] = [];
+
+        const next = prev.map(c => {
+          if (c.status === 'Completed') return c;
+
+          const startDt = new Date(`${c.date}T${c.startTime}`);
+          const endDt   = new Date(`${c.date}T${c.endTime}`);
+
+          if (c.status === 'Upcoming' && now >= startDt && now < endDt) {
+            toUpdate.push({ id: c.id, newStatus: 'Active' });
+            return { ...c, status: 'Active' as const };
+          }
+
+          if ((c.status === 'Active' || c.status === 'Upcoming') && now >= endDt) {
+            toUpdate.push({ id: c.id, newStatus: 'Completed' });
+            return { ...c, status: 'Completed' as const };
+          }
+
+          return c;
+        });
+
+        // Persist the changes asynchronously (fire-and-forget inside the setter)
+        for (const { id, newStatus } of toUpdate) {
+          updateContest(id, { status: newStatus } as any)
+            .then(() => {
+              if (newStatus === 'Active') toast.success('Contest is now LIVE — auto-activated!');
+              if (newStatus === 'Completed') toast('Contest auto-marked as Completed.', { icon: '🏁' });
+            })
+            .catch(err => console.error('Auto-transition failed:', err));
+        }
+
+        return toUpdate.length > 0 ? next : prev;
+      });
+    }
+
+    // Run immediately on mount, then every 30 seconds
+    checkAndTransition();
+    const timer = setInterval(checkAndTransition, 30_000);
+    return () => clearInterval(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function setField(field: string, value: string) { setForm(f => ({ ...f, [field]: value })); }
 
   // Create Contest
