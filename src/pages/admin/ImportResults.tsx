@@ -23,15 +23,16 @@ function parseCSV(text: string): ParsedRow[] {
   const lines = text.trim().split('\n');
   if (lines.length < 2) return [];
   const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
-  const rankIdx = headers.findIndex((h) => h.includes('rank'));
-  const nameIdx = headers.findIndex((h) => h.includes('name') || h.includes('handle'));
-  const scoreIdx = headers.findIndex((h) => h.includes('score') || h.includes('point'));
+  const rankIdx    = headers.findIndex((h) => h.includes('rank'));
+  const nameIdx    = headers.findIndex((h) => h.includes('username') || h.includes('name') || h.includes('handle'));
+  const scoreIdx   = headers.findIndex((h) => h.includes('score') || h.includes('point'));
   const penaltyIdx = headers.findIndex((h) => h.includes('penalty'));
-  const solvedIdx = headers.findIndex((h) => h.includes('solved'));
+  const solvedIdx  = headers.findIndex((h) => h.includes('solved'));
 
-  if (rankIdx < 0 || nameIdx < 0 || scoreIdx < 0 || penaltyIdx < 0) return [];
+  // Rank, name and score are required; penalty is optional (HackerRank CSVs often omit it)
+  if (rankIdx < 0 || nameIdx < 0 || scoreIdx < 0) return [];
 
-  return lines
+  const parsed = lines
     .slice(1)
     .filter((l) => l.trim())
     .map((l) => {
@@ -40,11 +41,16 @@ function parseCSV(text: string): ParsedRow[] {
         rank: parseInt(cols[rankIdx]) || 0,
         name: cols[nameIdx] || '',
         score: parseFloat(cols[scoreIdx]) || 0,
-        penalty: parseFloat(cols[penaltyIdx]) || 0,
+        penalty: penaltyIdx >= 0 ? (parseFloat(cols[penaltyIdx]) || 0) : 0,
         solved: solvedIdx >= 0 ? parseInt(cols[solvedIdx]) || 0 : 0,
       };
     })
-    .filter((r) => r.rank > 0);
+    .filter((r) => r.name.trim() !== '');
+
+  // HackerRank assigns the same rank to all tied participants (e.g. 108 people at rank 1).
+  // Re-rank by row position so each participant gets a unique sequential rank (1, 2, 3…).
+  // Rows are already sorted by HackerRank: score desc, then submission time asc.
+  return parsed.map((r, i) => ({ ...r, rank: i + 1 }));
 }
 
 export default function ImportResults() {

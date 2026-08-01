@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import type { Certificate, Participant, CertificateType, Contest } from '../../types';
 import {
   Award, Plus, Search, Filter, Trash2, Eye, Download, Mail,
-  CheckCircle2, Clock, AlertTriangle, X, Loader2, Sparkles, Crown, Zap
+  CheckCircle2, Clock, AlertTriangle, X, Loader2, Sparkles, Crown, Zap, Trophy
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { renderCertificate, downloadCertificate, type CertificateData } from '../../lib/certificateGenerator';
@@ -41,6 +41,8 @@ export default function ManageCertificates() {
   const [season] = useState('2026-27');
   const [position, setPosition] = useState('1st');
   const [issuedDateStr, setIssuedDateStr] = useState('29th August 2026');
+  // Per-uid position overrides for winner bulk issuance (rank → "1st", "2nd", etc.)
+  const [winnerPositions, setWinnerPositions] = useState<Record<string, string>>({});
   
   // Participant selector search & filters
   const [participantSearch, setParticipantSearch] = useState('');
@@ -54,6 +56,7 @@ export default function ManageCertificates() {
   // Contest-based bulk selection
   const [contests, setContests] = useState<Contest[]>([]);
   const [contestPickerOpen, setContestPickerOpen] = useState(false);
+  const [winnerPickerOpen, setWinnerPickerOpen] = useState(false);
   const [loadingContestParticipants, setLoadingContestParticipants] = useState(false);
 
   // Canvas refs for preview
@@ -144,6 +147,10 @@ export default function ManageCertificates() {
 
         const certId = generateCertId(i);
         const newId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${i}`;
+        // Use per-uid position for winners (set during bulk winner selection), else global position
+        const certPosition = certType === 'Winner'
+          ? (winnerPositions[uid] || position)
+          : undefined;
         await upsertCertificate({
           id: newId,
           certificateId: certId,
@@ -153,14 +160,14 @@ export default function ManageCertificates() {
           certificateType: certType,
           contestName,
           season,
-          position: certType === 'Winner' ? position : undefined,
+          position: certPosition,
           issuedDate: issuedDateStr,
           status: 'Issued',
           issuedBy: currentAdmin?.fullName || user?.email || 'Admin',
           templateId: certType.toLowerCase().replace(/\s+/g, '_'),
           createdAt: new Date().toISOString(),
         });
-        setCerts(prev => [...prev, { id: newId, certificateId: certId, participantId: part.participantId || part.uid, participantName: part.fullName, email: part.email, certificateType: certType, contestName, season, position: certType === 'Winner' ? position : undefined, issuedDate: issuedDateStr, status: 'Issued', issuedBy: currentAdmin?.fullName || user?.email || 'Admin', templateId: certType.toLowerCase().replace(/\s+/g, '_'), createdAt: new Date().toISOString() } as Certificate]);
+        setCerts(prev => [...prev, { id: newId, certificateId: certId, participantId: part.participantId || part.uid, participantName: part.fullName, email: part.email, certificateType: certType, contestName, season, position: certPosition, issuedDate: issuedDateStr, status: 'Issued', issuedBy: currentAdmin?.fullName || user?.email || 'Admin', templateId: certType.toLowerCase().replace(/\s+/g, '_'), createdAt: new Date().toISOString() } as Certificate]);
 
         successCount++;
         setProgress({ current: successCount, total: selectedUids.length });
@@ -169,6 +176,7 @@ export default function ManageCertificates() {
       toast.success(`Successfully issued ${successCount} certificate(s) to participant(s)!`);
       setShowCreateModal(false);
       setSelectedUids([]);
+      setWinnerPositions({});
     } catch (err: any) {
       toast.error(err.message || 'Issuance failed');
     } finally {
@@ -213,6 +221,58 @@ export default function ManageCertificates() {
     }
   }
 
+  // Auto-select top 10 participants for winner certificates
+  async function handleSelectWinnersFromContest(contestId: string) {
+    setLoadingContestParticipants(true);
+    try {
+      const results = await getResultsByContest(contestId);
+      // Sort by rank ascending first, then take top 10
+      const top10 = results
+        .filter(r => r.participantId)
+        .sort((a, b) => a.rank - b.rank)
+        .slice(0, 10);
+      if (top10.length === 0) {
+        toast.error('No results found for this contest. Import results first.');
+        return;
+      }
+      const toOrdinal = (n: number) => {
+        const s = ['th','st','nd','rd'];
+        const v = n % 100;
+        return n + (s[(v - 20) % 10] || s[v] || s[0]);
+      };
+      // Build uid → position map IN rank order
+      // Use index+1 as the position (not r.rank from DB) so it's always 1,2,3...
+      const posMap: Record<string, string> = {};
+      const matchedUids: string[] = [];
+      let position = 1;
+      for (const r of top10) {
+        const p = participants.find(p => p.participantId === r.participantId);
+        if (p) {
+          matchedUids.push(p.uid);
+          posMap[p.uid] = toOrdinal(position);
+          position++;
+        }
+      }
+      if (matchedUids.length === 0) {
+        toast.error('Could not match top 10 to registered participants.');
+        return;
+      }
+      setWinnerPositions(posMap);
+      setSelectedUids(matchedUids);
+      setCertType('Winner');
+      setPosition('1st');
+      const contest = contests.find(c => c.id === contestId);
+      if (contest) setIssuedDateStr(contest.date);
+      setWinnerPickerOpen(false);
+      setShowCreateModal(true);
+      toast.success(`Top ${matchedUids.length} winners auto-selected with correct positions!`);
+    } catch {
+      toast.error('Failed to load contest results');
+    } finally {
+      setLoadingContestParticipants(false);
+    }
+  }
+
   // Filtered participants for selector
   const filteredParticipants = participants.filter(p => {
     const matchSearch = !participantSearch ||
@@ -243,6 +303,12 @@ export default function ManageCertificates() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={() => setWinnerPickerOpen(true)}
+            className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5 bg-gold/10 border-gold/40 text-gold hover:bg-gold/20"
+          >
+            <Trophy size={14} /> Top 10 Winners
+          </button>
           <button
             onClick={() => setContestPickerOpen(true)}
             className="btn-primary text-xs px-4 py-2 flex items-center gap-1.5 bg-electric-blue/10 border-electric-blue/30 text-electric-blue hover:bg-electric-blue/20"
@@ -859,6 +925,48 @@ export default function ManageCertificates() {
             {loadingContestParticipants && (
               <div className="flex items-center justify-center gap-2 text-xs text-neon-cyan">
                 <Loader2 size={14} className="animate-spin" /> Loading participants…
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ── MODAL 6: Contest Picker for Top 10 Winner Certs ── */}
+      {winnerPickerOpen && createPortal(
+        <div className="fixed inset-0 top-0 left-0 w-screen h-screen z-[9999] bg-[#070d1a]/95 backdrop-blur-xl flex items-center justify-center p-4">
+          <div className="card max-w-md w-full p-6 space-y-4 border-gold/30 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="font-heading text-sm font-bold flex items-center gap-2 text-gold">
+                <Trophy size={16} /> Top 10 Winner Certs from Contest
+              </h3>
+              <button onClick={() => setWinnerPickerOpen(false)} className="text-text-secondary hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="text-xs text-text-secondary">
+              Select a contest — top 10 ranked participants will be auto-selected with cert type set to <span className="text-gold font-semibold">Winner</span>.
+            </p>
+            {contests.length === 0 ? (
+              <p className="text-xs text-amber-400 text-center py-4">No completed contests found. Import results first.</p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {contests.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => handleSelectWinnersFromContest(c.id)}
+                    disabled={loadingContestParticipants}
+                    className="w-full text-left p-3 rounded-lg border border-white/10 hover:border-gold/40 hover:bg-gold/5 transition-all disabled:opacity-50"
+                  >
+                    <div className="text-white text-xs font-semibold">{c.name}</div>
+                    <div className="text-text-secondary text-[10px] mt-0.5">{c.date} · {c.platform || c.mode}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {loadingContestParticipants && (
+              <div className="flex items-center justify-center gap-2 text-xs text-gold">
+                <Loader2 size={14} className="animate-spin" /> Loading top 10…
               </div>
             )}
           </div>

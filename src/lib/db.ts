@@ -141,7 +141,9 @@ export async function getParticipantByUid(uid: string): Promise<Participant | nu
 }
 
 export async function getParticipants(limit = 0): Promise<Participant[]> {
-  let query = supabase.from('participants').select('*').order('rating', { ascending: false });
+  let query = supabase.from('participants').select('*')
+    .order('monthly_points', { ascending: false })
+    .order('rating', { ascending: false });
   if (limit > 0) query = query.limit(limit);
   const { data, error } = await query;
   if (error) throw new Error(error.message);

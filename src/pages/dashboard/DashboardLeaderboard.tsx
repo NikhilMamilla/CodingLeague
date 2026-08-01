@@ -25,6 +25,7 @@ interface LeaderRow {
   contests: number;
   attendance: number;
   badges: number;
+  monthlyPoints: number;
   foundingMember?: boolean;
 }
 
@@ -52,6 +53,7 @@ export default function DashboardLeaderboard() {
           college: p.college, branch: p.branch, year: p.year,
           rating: p.rating, tier: p.tier, contests: p.contestsParticipated,
           attendance: p.attendance ?? 0, badges: p.badges?.length ?? 0,
+          monthlyPoints: p.monthlyPoints ?? 0,
           foundingMember: p.foundingMember,
         })));
       setLoading(false);
@@ -243,7 +245,7 @@ function FullTable({ rows, myUid }: { rows: LeaderRow[]; myUid?: string }) {
         <table className="w-full text-xs font-body min-w-[600px]">
           <thead>
             <tr className="border-b border-neon-cyan/10">
-              {['Rank', 'Participant', 'College', 'Rating', 'Tier', 'Contests', 'Badges'].map(h => (
+              {['Rank', 'Participant', 'College', 'LP', 'Rating', 'Tier', 'Contests', 'Badges'].map(h => (
                 <th key={h} className="text-left py-2.5 px-3 text-[10px] text-text-secondary/60 uppercase tracking-wider font-medium">{h}</th>
               ))}
             </tr>
@@ -282,6 +284,9 @@ function FullTable({ rows, myUid }: { rows: LeaderRow[]; myUid?: string }) {
                   <td className="py-3 px-3 text-text-secondary">
                     <div>{r.college}</div>
                     <div className="text-[10px] text-text-secondary/50">{r.branch} · {r.year}</div>
+                  </td>
+                  <td className="py-3 px-3 font-numbers font-bold text-gold">
+                    {r.monthlyPoints > 0 ? r.monthlyPoints : <span className="text-text-secondary/40">—</span>}
                   </td>
                   <td className="py-3 px-3 font-numbers font-bold text-neon-cyan">{r.rating}</td>
                   <td className="py-3 px-3">
@@ -329,7 +334,7 @@ function TierTable({ rows, myUid }: { rows: LeaderRow[]; myUid?: string }) {
       <table className="w-full text-xs font-body min-w-[400px]">
         <thead>
           <tr className="border-b border-neon-cyan/10">
-            {['Rank', 'Participant', 'College', 'Rating', 'Contests'].map(h => (
+            {['Rank', 'Participant', 'College', 'LP', 'Rating', 'Contests'].map(h => (
               <th key={h} className="text-left py-2 px-3 text-[10px] text-text-secondary/60 uppercase tracking-wider font-medium">{h}</th>
             ))}
           </tr>
@@ -350,6 +355,9 @@ function TierTable({ rows, myUid }: { rows: LeaderRow[]; myUid?: string }) {
                   <div className="text-text-secondary/60 text-[10px]">{r.id}</div>
                 </td>
                 <td className="py-2.5 px-3 text-text-secondary text-[11px]">{r.college}</td>
+                <td className="py-2.5 px-3 font-numbers font-bold text-gold">
+                  {r.monthlyPoints > 0 ? r.monthlyPoints : <span className="text-text-secondary/40">—</span>}
+                </td>
                 <td className="py-2.5 px-3 font-numbers font-bold text-neon-cyan">{r.rating}</td>
                 <td className="py-2.5 px-3 font-numbers text-text-secondary">{r.contests}</td>
               </tr>

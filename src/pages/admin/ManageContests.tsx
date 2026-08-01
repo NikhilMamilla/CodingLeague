@@ -150,6 +150,7 @@ export default function ManageContests() {
         mode: editingContest.mode, date: editingContest.date,
         startTime: editingContest.startTime, endTime: editingContest.endTime,
         duration: Number(editingContest.duration) || 120,
+        difficulty: editingContest.difficulty,
         platform: editingContest.platform || undefined,
         contestLink: editingContest.contestLink || undefined,
         venue: editingContest.venue || undefined,

@@ -173,16 +173,26 @@ export const BADGE_META: Record<BadgeType, { label: string; emoji: string }> = {
 // ─── League Points Table ──────────────────────────────────────────────────────
 
 export const LEAGUE_POINTS_TABLE: Record<number, number> = {
-  1: 100, 2: 95, 3: 90, 4: 87, 5: 84,
-  6: 82,  7: 80, 8: 78, 9: 76, 10: 74,
+  1: 100, 2: 99, 3: 98, 4: 97, 5: 96,
+  6: 95,  7: 94, 8: 93, 9: 92, 10: 91,
+  11: 89, 12: 87, 13: 85, 14: 83, 15: 81,
+  16: 79, 17: 77, 18: 75, 19: 73, 20: 71,
+  21: 69, 22: 67, 23: 65, 24: 63, 25: 61,
 };
 
 export function getLeaguePointsForRank(rank: number, hasSubmission: boolean = true): number {
   if (!hasSubmission) return 0;
-  if (rank >= 1 && rank <= 10) return LEAGUE_POINTS_TABLE[rank] ?? 74;
-  if (rank >= 11 && rank <= 20) return 60;
-  if (rank >= 21 && rank <= 40) return 40;
-  if (rank >= 41 && rank <= 60) return 25;
+  if (rank in LEAGUE_POINTS_TABLE) return LEAGUE_POINTS_TABLE[rank];
+  if (rank <= 35)  return 58;
+  if (rank <= 50)  return 55;
+  if (rank <= 75)  return 48;
+  if (rank <= 100) return 40;
+  if (rank <= 125) return 33;
+  if (rank <= 150) return 27;
+  if (rank <= 175) return 22;
+  if (rank <= 200) return 18;
+  if (rank <= 225) return 15;
+  if (rank <= 250) return 12;
   return 10;
 }
 
