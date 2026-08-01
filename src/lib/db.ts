@@ -140,14 +140,18 @@ export async function getParticipantByUid(uid: string): Promise<Participant | nu
   return rowToParticipant(data);
 }
 
-export async function getParticipants(limit = 200): Promise<Participant[]> {
-  const { data, error } = await supabase.from('participants').select('*').order('rating', { ascending: false }).limit(limit);
+export async function getParticipants(limit = 0): Promise<Participant[]> {
+  let query = supabase.from('participants').select('*').order('rating', { ascending: false });
+  if (limit > 0) query = query.limit(limit);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []).map(rowToParticipant);
 }
 
-export async function getParticipantsLatestFirst(limit = 500): Promise<Participant[]> {
-  const { data, error } = await supabase.from('participants').select('*').order('participant_id', { ascending: false }).limit(limit);
+export async function getParticipantsLatestFirst(limit = 10000): Promise<Participant[]> {
+  let query = supabase.from('participants').select('*').order('participant_id', { ascending: false });
+  if (limit > 0) query = query.limit(limit);
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []).map(rowToParticipant);
 }
@@ -557,10 +561,11 @@ export async function compactParticipantIds(
 
   const newMax = rows.length;
 
-  // 4. Update counter to new max
-  await supabase
+  // 4. Update counter to new max — throw if this fails so caller knows
+  const { error: cErr } = await supabase
     .from('counters')
     .upsert({ id: 'participant_id', value: newMax }, { onConflict: 'id' });
+  if (cErr) throw new Error(`Counter update failed: ${cErr.message}`);
 
   return { renamed, newMax };
 }

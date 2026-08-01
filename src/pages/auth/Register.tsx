@@ -81,7 +81,24 @@ const PLATFORMS = [
 ] as const;
 
 async function generateParticipantId(): Promise<string> {
-  const next = await incrementCounter('participantId');
+  // Read counter and actual max from DB simultaneously
+  const [counterVal, maxRow] = await Promise.all([
+    supabase.from('counters').select('value').eq('id', 'participant_id').maybeSingle(),
+    supabase.from('participants').select('participant_id').order('participant_id', { ascending: false }).limit(1).maybeSingle(),
+  ]);
+
+  // Derive actual max number from the highest existing ID
+  const existingMax = maxRow.data?.participant_id
+    ? parseInt((maxRow.data.participant_id as string).replace(/\D/g, ''), 10)
+    : 0;
+
+  // Use whichever is higher — counter or actual max — to prevent gaps or duplicates
+  const counterCurrent = counterVal.data?.value ?? 0;
+  const next = Math.max(counterCurrent, existingMax) + 1;
+
+  // Write the new value back to counter
+  await supabase.from('counters').upsert({ id: 'participant_id', value: next }, { onConflict: 'id' });
+
   return 'CBB' + String(next).padStart(6, '0');
 }
 

@@ -36,7 +36,7 @@ export default function ManageUsers() {
   const [renamingCollege, setRenamingCollege] = useState<string | null>(null);
 
   useEffect(() => {
-    getParticipantsLatestFirst(500).then(data => {
+    getParticipantsLatestFirst().then(data => {
       setParticipants(data.filter(p => p.role !== 'admin' && p.role !== 'super_admin'));
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -70,7 +70,7 @@ export default function ManageUsers() {
     try {
       const { renamed, newMax } = await compactParticipantIds();
       toast.success(`Done! Renamed ${renamed} IDs. New max: ${newMax}. Counter set to ${newMax}.`, { duration: 5000 });
-      const fresh = await getParticipantsLatestFirst(500);
+      const fresh = await getParticipantsLatestFirst();
       setParticipants(fresh.filter(p => p.role !== 'admin' && p.role !== 'super_admin'));
     } catch (e: any) {
       toast.error('Compact failed: ' + (e.message ?? 'Unknown error'));
@@ -121,7 +121,7 @@ export default function ManageUsers() {
     try {
       const { error } = await supabase.rpc('uppercase_all_colleges');
       if (error) throw new Error(error.message);
-      const fresh = await getParticipantsLatestFirst(500);
+      const fresh = await getParticipantsLatestFirst();
       setParticipants(fresh.filter(p => p.role !== 'admin' && p.role !== 'super_admin'));
       toast.success('Done! All colleges, universities and branches converted to UPPERCASE.', { duration: 5000 });
     } catch (e: any) {

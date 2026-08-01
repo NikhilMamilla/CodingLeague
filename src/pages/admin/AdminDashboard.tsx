@@ -48,7 +48,7 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     Promise.all([
-      getParticipants(500),
+      getParticipants(),
       getContests(),
       getAllResults(),
       getAnnouncements(3),
