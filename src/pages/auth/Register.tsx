@@ -9,7 +9,8 @@ import FoundingMemberBadge from '../../components/ui/FoundingMemberBadge';
 import { reserveFoundingRank, type FoundingReservation } from '../../lib/foundingMembers';
 import toast from 'react-hot-toast';
 import { extractHandle, verifyPlatformProfile, type VerificationResult } from '../../lib/profileVerification';
-import { upsertParticipant, incrementCounter, getSetting, insertAnnouncement } from '../../lib/db';
+import { upsertParticipant, getSetting, insertAnnouncement } from '../../lib/db';
+import { supabase } from '../../lib/supabase';
 
 type Step = 1 | 2 | 3;
 
