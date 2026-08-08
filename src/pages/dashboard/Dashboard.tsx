@@ -13,7 +13,7 @@ import { BADGE_META } from '../../types';
 import toast from 'react-hot-toast';
 import { getContests, getParticipants, getAnnouncements, getSetting, getResultsByParticipant } from '../../lib/db';
 import { supabase } from '../../lib/supabase';
-import { getCurrentWeekBlock, getNextWeekBlock, PRACTICE_LINKS } from '../../lib/weekTopics';
+import { getTopicByWeek, PRACTICE_LINKS } from '../../lib/weekTopics';
 
 const TIER_CFG: Record<string, { cls: string; next: number; min: number; nextName: string }> = {
   Beginner:               { cls: 'text-gray-400 font-semibold',    next: 900,   min: 800,  nextName: 'Explorer'              },
@@ -109,7 +109,7 @@ function rankEmoji(n: number) {
 
 export default function Dashboard() {
   const { participant } = useAuth();
-  const [_activeContest,   setActiveContest]   = useState<Contest | null>(null);
+  const [activeContest,    setActiveContest]   = useState<Contest | null>(null);
   const [upcomingContest,  setUpcomingContest] = useState<Contest | null>(null);
   const [recentResults,   setRecentResults]   = useState<ContestResult[]>([]);
   const [leaderboard,     setLeaderboard]     = useState<LeaderRow[]>([]);
@@ -353,14 +353,18 @@ export default function Dashboard() {
         </div>
       )}
       {(() => {
-        const current = getCurrentWeekBlock();
-        const next    = getNextWeekBlock();
-        const display = current ?? next;
+        // Determine which contest to derive the week topic from:
+        // Priority: Active contest → Upcoming contest → fallback null
+        const referenceContest = activeContest ?? upcomingContest;
+        const weekNum = referenceContest?.weekNumber ?? null;
+        const display = weekNum ? getTopicByWeek(weekNum) : null;
         if (!display) return null;
         const links = PRACTICE_LINKS[display.topic];
+        const isLive = !!activeContest;
+
         return (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* This Week Card */}
+            {/* This Week's Topic Card */}
             <div className="lg:col-span-2 card border-neon-cyan/30 bg-neon-cyan/[0.02]">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -368,19 +372,25 @@ export default function Dashboard() {
                     <BookOpen size={13} className="text-neon-cyan" />
                   </div>
                   <h2 className="heading-sm !text-sm">
-                    {current ? "This Week's Topic" : "Next Up"}
+                    {isLive ? '🔴 Live Contest Topic' : "This Week's Topic"}
                   </h2>
                 </div>
                 <Link to="/dashboard/roadmap" className="text-neon-cyan text-xs hover:underline flex items-center gap-1">
                   Full Roadmap <ChevronRight size={11} />
                 </Link>
               </div>
+
               <div className="flex items-start gap-4">
                 <div className="text-4xl shrink-0">{display.icon}</div>
                 <div className="flex-1 min-w-0">
                   <div className="font-heading text-white text-base font-bold leading-tight">{display.topic}</div>
-                  <div className="text-text-secondary/60 text-[11px] mt-0.5">
-                    Week {display.weeks} · Contest {display.contests} · {display.dateRange}
+                  <div className="text-text-secondary/60 text-[11px] mt-0.5 flex items-center gap-2 flex-wrap">
+                    <span className="bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan px-2 py-0.5 rounded font-bold text-[10px]">
+                      Week {weekNum} · Contest {weekNum}
+                    </span>
+                    {referenceContest && (
+                      <span className="text-text-secondary/50">{referenceContest.name}</span>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {display.focusAreas.map(f => (
@@ -391,6 +401,7 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
+
               {links && (
                 <div className="flex items-center gap-2 mt-4 pt-3 border-t border-white/5">
                   <span className="text-[10px] text-text-secondary/50 uppercase tracking-wider mr-1">Practice Now:</span>
@@ -418,10 +429,10 @@ export default function Dashboard() {
               </div>
               <div className="space-y-3">
                 {[
-                  { label: 'Total Contests', value: '57', color: 'text-neon-cyan' },
-                  { label: 'Topic Weeks',    value: '27', color: 'text-electric-blue' },
-                  { label: 'Every Saturday', value: '🗓️', color: 'text-warning'       },
-                  { label: 'Season Ends',    value: 'Aug 7, 2027', color: 'text-gold' },
+                  { label: 'Total Contests', value: '57',           color: 'text-neon-cyan'      },
+                  { label: 'Topic Weeks',    value: '28',           color: 'text-electric-blue'  },
+                  { label: 'Every Saturday', value: '🗓️',           color: 'text-warning'        },
+                  { label: 'Season Ends',    value: 'Aug 7, 2027',  color: 'text-gold'           },
                 ].map(s => (
                   <div key={s.label} className="flex items-center justify-between">
                     <span className="text-[11px] text-text-secondary/60">{s.label}</span>
