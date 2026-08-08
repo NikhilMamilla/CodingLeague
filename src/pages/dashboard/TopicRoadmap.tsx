@@ -6,7 +6,6 @@ import {
   Wifi, MapPin, Calendar,
 } from 'lucide-react';
 import { WEEK_TOPIC_MAP, PRACTICE_LINKS, MONTH_LABELS } from '../../lib/weekTopics';
-import type { WeekBlock } from '../../lib/weekTopics';
 import { getContests } from '../../lib/db';
 import type { Contest } from '../../types';
 

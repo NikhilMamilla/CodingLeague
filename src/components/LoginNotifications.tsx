@@ -41,11 +41,12 @@ export default function LoginNotifications() {
     if (checked) return;
     const p = participant;
 
-    const stored = sessionStorage.getItem(STORAGE_KEY);
-    // First time: look back 7 days so users don't get flooded with old items.
+    // Use localStorage so the timestamp persists across browser sessions.
+    // Fall back to 24 hours ago on first visit — avoids flooding with old items.
+    const stored = localStorage.getItem(STORAGE_KEY);
     const lastCheck = stored
       ? new Date(stored)
-      : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      : new Date(Date.now() - 24 * 60 * 60 * 1000);
 
     async function load() {
       const notifications: NotificationItem[] = [];
@@ -148,7 +149,8 @@ export default function LoginNotifications() {
 
   function handleClose() {
     setOpen(false);
-    // Don't update localStorage so notification shows again on next login
+    // Save the current time so this batch won't show again
+    localStorage.setItem(STORAGE_KEY, new Date().toISOString());
   }
 
   const grouped = useMemo(() => {
@@ -253,7 +255,6 @@ export default function LoginNotifications() {
         <div className="p-5 border-t border-white/5 bg-white/[0.02]">
           <button onClick={() => {
             handleClose();
-            sessionStorage.setItem(STORAGE_KEY, new Date().toISOString());
           }} className="btn-primary w-full text-xs">
             Got it
           </button>
