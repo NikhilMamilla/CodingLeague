@@ -112,11 +112,18 @@ export default function LoginNotifications() {
       } catch { /* ignore */ }
 
       // ── Announcements ──
+      // Only show if posted within the last 24 hours from its createdAt timestamp.
+      // i.e. if posted Aug 1st → only shows until Aug 2nd, regardless of last visit.
       try {
         const ann = await getAnnouncements(20);
+        const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
         ann.forEach((a) => {
           const postedAt = parseDate(a.createdAt);
-          if (!postedAt || postedAt <= lastCheck) return;
+          if (!postedAt) return;
+          // Must have been posted within the last 24 hours
+          if (postedAt.getTime() < cutoff24h) return;
+          // Also must be newer than lastCheck so we don't re-show already-seen ones
+          if (postedAt <= lastCheck) return;
           notifications.push({
             id: `ann-${a.id}`,
             type: 'announcement',
