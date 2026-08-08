@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { Trophy, TrendingUp, Search, Medal, Crown, Star } from 'lucide-react';
+import { Trophy, TrendingUp, Search, Medal, Crown, Star, Calendar, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { getParticipants, getAllResults } from '../../lib/db';
+import { getParticipants, getAllResults, getContests, getResultsByContest } from '../../lib/db';
+import type { Contest, ContestResult } from '../../types';
 const TIER_CLASS: Record<string, string> = {
   Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
   Expert: 'tier-expert', Master: 'tier-master', Grandmaster: 'tier-grandmaster',
@@ -10,7 +11,7 @@ const TIER_CLASS: Record<string, string> = {
 
 const TIER_ORDER = ['Grandmaster', 'Master', 'Expert', 'Coder', 'Explorer', 'Beginner'];
 
-type Tab = 'overall' | 'tier' | 'college';
+type Tab = 'overall' | 'tier' | 'college' | 'contest';
 
 interface LeaderRow {
   rank:   number;
@@ -44,6 +45,12 @@ export default function DashboardLeaderboard() {
   const [tab,     setTab]     = useState<Tab>('overall');
   const [search,  setSearch]  = useState('');
 
+  // Contest leaderboard state
+  const [completedContests,   setCompletedContests]   = useState<Contest[]>([]);
+  const [selectedContestId,   setSelectedContestId]   = useState<string>('');
+  const [contestResults,      setContestResults]      = useState<ContestResult[]>([]);
+  const [contestResultsLoading, setContestResultsLoading] = useState(false);
+
   useEffect(() => {
     getParticipants(0).then(data => {
       setRows(data
@@ -71,6 +78,28 @@ export default function DashboardLeaderboard() {
       setContestCounts(Object.fromEntries(Object.entries(map).map(([id, s]) => [id, s.size])));
     }).catch(() => {});
   }, []);
+
+  // Load completed contests for the contest tab
+  useEffect(() => {
+    getContests().then(all => {
+      const completed = all.filter(c => c.status === 'Completed')
+        .sort((a, b) => (a.contestNumber ?? 0) - (b.contestNumber ?? 0));
+      setCompletedContests(completed);
+      if (completed.length > 0) setSelectedContestId(completed[completed.length - 1].id);
+    }).catch(() => {});
+  }, []);
+
+  // Load results whenever selected contest changes
+  useEffect(() => {
+    if (!selectedContestId) return;
+    setContestResultsLoading(true);
+    getResultsByContest(selectedContestId)
+      .then(results => {
+        setContestResults(results.sort((a, b) => a.rank - b.rank));
+        setContestResultsLoading(false);
+      })
+      .catch(() => setContestResultsLoading(false));
+  }, [selectedContestId]);
 
   const rowsWithActualContests = rows.map(r => ({
     ...r,
@@ -160,11 +189,12 @@ export default function DashboardLeaderboard() {
       )}
 
       {/* Tabs */}
-      <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1 w-fit">
+      <div className="flex items-center gap-1 bg-white/5 rounded-xl p-1 w-fit flex-wrap">
         {([
-          { key: 'overall', label: 'Overall', icon: Trophy     },
-          { key: 'college', label: 'My College', icon: Medal   },
-          { key: 'tier',    label: 'By Tier',  icon: Crown     },
+          { key: 'overall', label: 'Overall',    icon: Trophy    },
+          { key: 'contest', label: 'By Contest', icon: Calendar  },
+          { key: 'college', label: 'My College', icon: Medal     },
+          { key: 'tier',    label: 'By Tier',    icon: Crown     },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setTab(key)}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-body transition-all ${
@@ -181,6 +211,86 @@ export default function DashboardLeaderboard() {
         <div className="flex items-center justify-center py-24">
           <div className="w-8 h-8 rounded-full border-2 border-neon-cyan/20 border-t-neon-cyan animate-spin" />
         </div>
+      ) : tab === 'contest' ? (
+
+        /* ── Contest Leaderboard ── */
+        <div className="space-y-4">
+          {/* Contest selector */}
+          <div className="card p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div className="flex items-center gap-2 shrink-0">
+                <Calendar size={14} className="text-neon-cyan" />
+                <span className="text-xs text-white font-medium">Select Contest:</span>
+              </div>
+              {completedContests.length === 0 ? (
+                <span className="text-text-secondary text-xs italic">No completed contests yet.</span>
+              ) : (
+                <div className="relative flex-1 max-w-sm">
+                  <select
+                    value={selectedContestId}
+                    onChange={e => setSelectedContestId(e.target.value)}
+                    className="input-field text-xs pr-8 appearance-none cursor-pointer"
+                  >
+                    {completedContests.map(c => (
+                      <option key={c.id} value={c.id}>
+                        Contest #{c.contestNumber} — {c.name} ({c.date})
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary/50 pointer-events-none" />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Contest results table */}
+          {completedContests.length > 0 && (
+            <div className="card">
+              {(() => {
+                const selectedContest = completedContests.find(c => c.id === selectedContestId);
+                return selectedContest ? (
+                  <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+                    <div>
+                      <h2 className="font-heading text-white text-sm font-bold">{selectedContest.name}</h2>
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                        <span className="text-[10px] text-text-secondary/60">{selectedContest.date}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/10 border border-success/20 text-success">
+                          ✓ Completed
+                        </span>
+                        <span className="text-[10px] text-text-secondary/50">
+                          {selectedContest.mode} · {selectedContest.platform ?? selectedContest.venue ?? ''}
+                        </span>
+                        <span className="text-[10px] text-text-secondary/50">
+                          Week {selectedContest.weekNumber}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[11px] text-text-secondary/50 font-numbers">
+                      {contestResults.length} participants
+                    </span>
+                  </div>
+                ) : null;
+              })()}
+
+              {contestResultsLoading ? (
+                <div className="flex items-center justify-center py-16">
+                  <div className="w-6 h-6 rounded-full border-2 border-neon-cyan/20 border-t-neon-cyan animate-spin" />
+                </div>
+              ) : contestResults.length === 0 ? (
+                <div className="text-center py-12">
+                  <Trophy size={36} className="text-neon-cyan/20 mx-auto mb-3" />
+                  <p className="text-text-secondary text-sm">No results published for this contest yet.</p>
+                </div>
+              ) : (
+                <ContestResultsTable
+                  results={contestResults}
+                  myParticipantId={participant?.participantId}
+                />
+              )}
+            </div>
+          )}
+        </div>
+
       ) : tab === 'tier' ? (
 
         /* ── Tier groups ── */
@@ -226,6 +336,112 @@ export default function DashboardLeaderboard() {
           ) : (
             <FullTable rows={searched} myUid={participant?.uid} />
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Contest Results Table ── */
+function ContestResultsTable({ results, myParticipantId }: {
+  results: ContestResult[];
+  myParticipantId?: string;
+}) {
+  const PAGE_SIZE = 50;
+  const [page, setPage] = useState(0);
+  const totalPages = Math.ceil(results.length / PAGE_SIZE);
+  const pageRows = results.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  return (
+    <div className="space-y-4">
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs font-body min-w-[560px]">
+          <thead>
+            <tr className="border-b border-neon-cyan/10">
+              {['Rank', 'Participant', 'College', 'Score', 'Problems', 'Penalty', 'LP', 'Rating Δ'].map(h => (
+                <th key={h} className="text-left py-2.5 px-3 text-[10px] text-text-secondary/60 uppercase tracking-wider font-medium">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-white/5">
+            {pageRows.map(r => {
+              const isMe = r.participantId === myParticipantId;
+              const delta = r.ratingAfter - r.ratingBefore;
+              return (
+                <tr key={r.id}
+                  className={`transition-colors ${
+                    isMe ? 'bg-neon-cyan/5 border-l-2 border-l-neon-cyan' : 'hover:bg-white/5'
+                  }`}
+                >
+                  {/* Rank */}
+                  <td className="py-3 px-3">
+                    {r.rank === 1 ? <span className="text-xl">🥇</span>
+                      : r.rank === 2 ? <span className="text-xl">🥈</span>
+                      : r.rank === 3 ? <span className="text-xl">🥉</span>
+                      : <span className="text-xs font-numbers text-text-secondary">#{r.rank}</span>}
+                  </td>
+
+                  {/* Participant */}
+                  <td className="py-3 px-3">
+                    <div className={`font-medium ${isMe ? 'text-neon-cyan' : 'text-white'}`}>
+                      {r.participantName}
+                      {isMe && <span className="ml-1 text-[10px] text-neon-cyan/70">(you)</span>}
+                    </div>
+                    <div className="text-text-secondary/50 text-[10px] font-numbers">{r.participantId}</div>
+                  </td>
+
+                  {/* College */}
+                  <td className="py-3 px-3 text-text-secondary text-[11px]">{r.college}</td>
+
+                  {/* Score */}
+                  <td className="py-3 px-3 font-numbers font-bold text-white">{r.score}</td>
+
+                  {/* Problems */}
+                  <td className="py-3 px-3 font-numbers text-neon-cyan">{r.problemsSolved}</td>
+
+                  {/* Penalty */}
+                  <td className="py-3 px-3 font-numbers text-text-secondary/60">{r.penalty}</td>
+
+                  {/* League Points */}
+                  <td className="py-3 px-3 font-numbers font-bold text-gold">{r.leaguePoints}</td>
+
+                  {/* Rating Delta */}
+                  <td className="py-3 px-3 font-numbers">
+                    {r.ratingBefore > 0 ? (
+                      <span className={delta >= 0 ? 'text-success' : 'text-red-400'}>
+                        {delta >= 0 ? '+' : ''}{delta}
+                      </span>
+                    ) : (
+                      <span className="text-text-secondary/30">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between pt-3 border-t border-white/5">
+          <button
+            onClick={() => setPage(p => Math.max(0, p - 1))}
+            disabled={page === 0}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-white/10 text-xs text-text-secondary hover:text-white hover:border-neon-cyan/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            ← Prev
+          </button>
+          <span className="text-[11px] text-text-secondary/60 font-numbers">
+            Page {page + 1} of {totalPages} · {results.length} participants
+          </span>
+          <button
+            onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+            disabled={page >= totalPages - 1}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-white/10 text-xs text-text-secondary hover:text-white hover:border-neon-cyan/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            Next →
+          </button>
         </div>
       )}
     </div>
