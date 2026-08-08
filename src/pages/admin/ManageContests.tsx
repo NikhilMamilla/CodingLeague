@@ -559,7 +559,25 @@ export default function ManageContests() {
                   <select
                     className="input-field"
                     value={editingContest.mode}
-                    onChange={e => setEditingContest({ ...editingContest, mode: e.target.value as ContestMode })}
+                    onChange={e => {
+                      const newMode = e.target.value as ContestMode;
+                      if (newMode === 'Online') {
+                        // switching to Online — clear offline-only fields
+                        setEditingContest({
+                          ...editingContest,
+                          mode: newMode,
+                          venue: undefined,
+                        });
+                      } else {
+                        // switching to Offline — clear online-only fields
+                        setEditingContest({
+                          ...editingContest,
+                          mode: newMode,
+                          platform: undefined,
+                          contestLink: undefined,
+                        });
+                      }
+                    }}
                   >
                     <option value="Online">Online</option>
                     <option value="Offline">Offline</option>
@@ -622,36 +640,51 @@ export default function ManageContests() {
                 </div>
               </div>
 
-              {editingContest.mode === 'Online' ? (
-                <>
+              {/* Mode-specific fields */}
+              <div className={`space-y-3 rounded-xl border p-3 transition-all ${
+                editingContest.mode === 'Online'
+                  ? 'border-neon-cyan/30 bg-neon-cyan/5'
+                  : 'border-amber-400/30 bg-amber-400/5'
+              }`}>
+                <p className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${
+                  editingContest.mode === 'Online' ? 'text-neon-cyan' : 'text-amber-400'
+                }`}>
+                  {editingContest.mode === 'Online' ? '🖥️ Online Contest Details' : '📍 Offline Contest Details'}
+                </p>
+
+                {editingContest.mode === 'Online' ? (
+                  <>
+                    <div>
+                      <label className="input-label">Platform (HackerRank, Unstop, LeetCode, Codeforces)</label>
+                      <input
+                        className="input-field"
+                        placeholder="e.g. HackerRank / Unstop"
+                        value={editingContest.platform || ''}
+                        onChange={e => setEditingContest({ ...editingContest, platform: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="input-label text-neon-cyan font-bold">Contest Platform URL (Link for Participants)</label>
+                      <input
+                        className="input-field font-mono text-neon-cyan border-neon-cyan/40"
+                        placeholder="https://unstop.com/o/..."
+                        value={editingContest.contestLink || ''}
+                        onChange={e => setEditingContest({ ...editingContest, contestLink: e.target.value })}
+                      />
+                    </div>
+                  </>
+                ) : (
                   <div>
-                    <label className="input-label">Platform</label>
+                    <label className="input-label">Venue *</label>
                     <input
-                      className="input-field"
-                      value={editingContest.platform || ''}
-                      onChange={e => setEditingContest({ ...editingContest, platform: e.target.value })}
+                      className="input-field border-amber-400/40"
+                      placeholder="BVRIT Lab Block, Room 204"
+                      value={editingContest.venue || ''}
+                      onChange={e => setEditingContest({ ...editingContest, venue: e.target.value })}
                     />
                   </div>
-                  <div>
-                    <label className="input-label text-neon-cyan font-bold">Contest Platform URL (Link for Participants)</label>
-                    <input
-                      className="input-field font-mono text-neon-cyan border-neon-cyan/40"
-                      placeholder="https://..."
-                      value={editingContest.contestLink || ''}
-                      onChange={e => setEditingContest({ ...editingContest, contestLink: e.target.value })}
-                    />
-                  </div>
-                </>
-              ) : (
-                <div>
-                  <label className="input-label">Venue</label>
-                  <input
-                    className="input-field"
-                    value={editingContest.venue || ''}
-                    onChange={e => setEditingContest({ ...editingContest, venue: e.target.value })}
-                  />
-                </div>
-              )}
+                )}
+              </div>
 
               <div>
                 <label className="input-label">Problem Setter</label>
