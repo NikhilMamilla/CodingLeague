@@ -302,6 +302,7 @@ export default function DashboardLeaderboard() {
                 <ContestResultsTable
                   results={contestResults}
                   myParticipantId={participant?.participantId}
+                  participantNameMap={Object.fromEntries(rows.map(r => [r.id, r.name]))}
                 />
               )}
             </div>
@@ -360,9 +361,10 @@ export default function DashboardLeaderboard() {
 }
 
 /* ── Contest Results Table ── */
-function ContestResultsTable({ results, myParticipantId }: {
+function ContestResultsTable({ results, myParticipantId, participantNameMap }: {
   results: ContestResult[];
   myParticipantId?: string;
+  participantNameMap: Record<string, string>; // participantId → fullName
 }) {
   const PAGE_SIZE = 50;
   const [page, setPage] = useState(0);
@@ -382,8 +384,14 @@ function ContestResultsTable({ results, myParticipantId }: {
           </thead>
           <tbody className="divide-y divide-white/5">
             {pageRows.map(r => {
-              const isMe = r.participantId === myParticipantId;
+              const isMe  = r.participantId === myParticipantId;
               const delta = r.ratingAfter - r.ratingBefore;
+              // Real full name from participants table (if matched), else fall back to stored name
+              const realName = participantNameMap[r.participantId?.trim()] || null;
+              // The stored participantName might be a HackerRank username — show it as the platform ID
+              const displayName = realName || r.participantName;
+              const platformId  = realName && realName !== r.participantName ? r.participantName : null;
+
               return (
                 <tr key={r.id}
                   className={`transition-colors ${
@@ -398,13 +406,20 @@ function ContestResultsTable({ results, myParticipantId }: {
                       : <span className="text-xs font-numbers text-text-secondary">#{r.rank}</span>}
                   </td>
 
-                  {/* Participant */}
+                  {/* Participant — real name + platform username + CBB ID */}
                   <td className="py-3 px-3">
-                    <div className={`font-medium ${isMe ? 'text-neon-cyan' : 'text-white'}`}>
-                      {r.participantName}
+                    <div className={`font-medium leading-tight ${isMe ? 'text-neon-cyan' : 'text-white'}`}>
+                      {displayName}
                       {isMe && <span className="ml-1 text-[10px] text-neon-cyan/70">(you)</span>}
                     </div>
-                    <div className="text-text-secondary/50 text-[10px] font-numbers">{r.participantId}</div>
+                    {/* HackerRank / platform username if different from real name */}
+                    {platformId && (
+                      <div className="text-[10px] text-warning/70 font-mono mt-0.5">
+                        🎮 {platformId}
+                      </div>
+                    )}
+                    {/* CBB participant ID */}
+                    <div className="text-text-secondary/40 text-[10px] font-numbers">{r.participantId}</div>
                   </td>
 
                   {/* College */}
