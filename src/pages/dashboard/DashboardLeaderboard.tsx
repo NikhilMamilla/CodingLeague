@@ -68,15 +68,24 @@ export default function DashboardLeaderboard() {
   }, []);
 
   useEffect(() => {
+    // Build a per-participant contest count from the results table.
+    // This is used as the primary count; contestsParticipated on the
+    // participant record is used as fallback (see rowsWithActualContests).
     getAllResults().then(results => {
       const map: Record<string, Set<string>> = {};
       results.forEach(r => {
         if (!r.participantId || !r.contestId) return;
-        map[r.participantId] ??= new Set();
-        map[r.participantId].add(r.contestId);
+        // Trim to guard against any whitespace mismatches
+        const pid = r.participantId.trim();
+        map[pid] ??= new Set();
+        map[pid].add(r.contestId);
       });
-      setContestCounts(Object.fromEntries(Object.entries(map).map(([id, s]) => [id, s.size])));
-    }).catch(() => {});
+      setContestCounts(
+        Object.fromEntries(Object.entries(map).map(([id, s]) => [id, s.size]))
+      );
+    }).catch(() => {
+      // Non-critical — rows will fall back to contestsParticipated
+    });
   }, []);
 
   // Load completed contests for the contest tab
@@ -103,10 +112,18 @@ export default function DashboardLeaderboard() {
 
   const rowsWithActualContests = rows.map(r => ({
     ...r,
-    contests: contestCounts[r.id] ?? 0,
+    // Use contestCounts from results table if available, fall back to
+    // contestsParticipated stored on the participant record itself.
+    contests: contestCounts[r.id] > 0
+      ? contestCounts[r.id]
+      : (r.contests ?? 0),
   }));
 
-  const myContestCount = participant ? contestCounts[participant.participantId] ?? 0 : 0;
+  const myContestCount = participant
+    ? (contestCounts[participant.participantId] > 0
+        ? contestCounts[participant.participantId]
+        : (participant.contestsParticipated ?? 0))
+    : 0;
 
   // My rank
   const myRank = rowsWithActualContests.findIndex(r => r.uid === participant?.uid);
