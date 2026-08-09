@@ -42,17 +42,28 @@ export default function MyCertificates() {
 
   async function handleDownload(cert: Certificate) {
     try {
-      toast.loading('Generating certificate download…', { id: 'cert-dl' });
+      toast.loading('Preparing certificate…', { id: 'cert-dl' });
       await downloadCertificate({
         certificateId: cert.certificateId || cert.id,
         participantName: cert.participantName || participant?.fullName || 'Participant',
         certificateType: cert.certificateType || cert.type || 'Participation',
+        contestName: cert.contestName,
+        season: cert.season,
         position: cert.position,
         issuedDate: cert.issuedDate,
+        // Pass Cloudinary URL if available — fastest & most reliable download path
+        cloudinaryUrl: cert.cloudinaryUrl || undefined,
       });
-      toast.success('Download started!', { id: 'cert-dl' });
-    } catch {
-      toast.error('Failed to download certificate', { id: 'cert-dl' });
+      toast.success('Certificate downloaded!', { id: 'cert-dl' });
+    } catch (err: any) {
+      console.error('Certificate download error:', err);
+      // If we have a cloudinaryUrl, offer it as a direct link fallback
+      if (cert.cloudinaryUrl) {
+        toast.error('Auto-download failed. Opening directly…', { id: 'cert-dl' });
+        window.open(cert.cloudinaryUrl, '_blank');
+      } else {
+        toast.error(err?.message || 'Failed to download certificate. Please try again.', { id: 'cert-dl' });
+      }
     }
   }
 
@@ -206,12 +217,26 @@ export default function MyCertificates() {
                   {/* Actions */}
                   <div className="flex items-center gap-2 pt-1">
                     {isIssued ? (
-                      <button
-                        onClick={() => handleDownload(c)}
-                        className="btn-primary text-xs py-2 flex-1 flex items-center justify-center gap-1.5"
-                      >
-                        <Download size={13} /> Download Certificate
-                      </button>
+                      <>
+                        <button
+                          onClick={() => handleDownload(c)}
+                          className="btn-primary text-xs py-2 flex-1 flex items-center justify-center gap-1.5"
+                        >
+                          <Download size={13} /> Download
+                        </button>
+                        {/* Direct open fallback — always visible if cloudinaryUrl exists */}
+                        {c.cloudinaryUrl && (
+                          <a
+                            href={c.cloudinaryUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-secondary text-xs py-2 px-3 flex items-center gap-1"
+                            title="Open certificate in new tab"
+                          >
+                            Open
+                          </a>
+                        )}
+                      </>
                     ) : (
                       <div className="flex-1 bg-white/5 border border-white/10 rounded-lg py-2 text-center text-xs text-text-secondary/60 italic">
                         Download unavailable (Pending Approval)

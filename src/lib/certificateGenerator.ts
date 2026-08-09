@@ -50,7 +50,7 @@ export async function renderCertificate(
     templatePath = '/FoundingMemberCertificate.png';
   }
 
-  // Load official base template image
+  // Load official base template image — try primary, fall back to Template.png
   const templateImg = (await loadImage(templatePath)) || (await loadImage('/Template.png'));
 
   const width = templateImg?.naturalWidth || 2048;
@@ -171,10 +171,19 @@ export async function generateCertificateBlob(data: CertificateData): Promise<Bl
   const canvas = document.createElement('canvas');
   await renderCertificate(canvas, data);
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob);
-      else reject(new Error('Failed to render certificate blob'));
-    }, 'image/png');
+    try {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error('Canvas returned empty blob — template image may be blocked by CORS.'));
+      }, 'image/png');
+    } catch (err: any) {
+      // Canvas tainted by cross-origin image
+      if (err?.name === 'SecurityError' || String(err).includes('tainted')) {
+        reject(new Error('Certificate template could not be loaded securely. Please try again or contact support.'));
+      } else {
+        reject(err);
+      }
+    }
   });
 }
 
@@ -198,9 +207,33 @@ export async function downloadFoundingCertificate(data: {
 }
 
 /**
- * Directly downloads the high-res certificate image file to the user's browser
+ * Directly downloads the high-res certificate image file to the user's browser.
+ * Strategy:
+ *   1. If a cloudinaryUrl is available on the data object, fetch and download that directly.
+ *   2. Otherwise, render locally via canvas onto the template image.
  */
-export async function downloadCertificate(data: CertificateData): Promise<void> {
+export async function downloadCertificate(data: CertificateData & { cloudinaryUrl?: string }): Promise<void> {
+  // ── Fast path: server-generated image already stored in Cloudinary ────────
+  if (data.cloudinaryUrl) {
+    try {
+      const response = await fetch(data.cloudinaryUrl);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${data.certificateId || 'CWCL'}_${(data.participantName || 'Certificate').replace(/\s+/g, '_')}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      return;
+    } catch {
+      // Cloudinary fetch failed — fall through to canvas render
+    }
+  }
+
+  // ── Canvas render path ────────────────────────────────────────────────────
   const blob = await generateCertificateBlob(data);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
