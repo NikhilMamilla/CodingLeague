@@ -54,8 +54,8 @@ export default function ManageContests() {
 
   // ── Auto status transitions ────────────────────────────────────────────────
   // Checks every 30 seconds:
-  //   Upcoming  → Active    when current time >= contest date + startTime
-  //   Active    → Completed when current time >= contest date + endTime
+  //   Upcoming → Active    when current time >= contest date + startTime && current time < contest date + endTime
+  //   Active   → Completed when current time >= contest date + endTime
   useEffect(() => {
     async function checkAndTransition() {
       const now = new Date();
@@ -74,7 +74,9 @@ export default function ManageContests() {
             return { ...c, status: 'Active' as const };
           }
 
-          if ((c.status === 'Active' || c.status === 'Upcoming') && now >= endDt) {
+          // Only auto-complete contests that are currently ACTIVE.
+          // Do NOT auto-complete UPCOMING contests automatically, so admins can activate them or upload links later in the day.
+          if (c.status === 'Active' && now >= endDt) {
             toUpdate.push({ id: c.id, newStatus: 'Completed' });
             return { ...c, status: 'Completed' as const };
           }
@@ -192,8 +194,16 @@ export default function ManageContests() {
       return;
     }
     try {
-      await updateContest(c.id, { status: newStatus } as any);
-      setContests(prev => prev.map(x => x.id === c.id ? { ...x, status: newStatus } : x));
+      const updates: any = { status: newStatus };
+      if (newStatus === 'Upcoming') {
+        const now = new Date();
+        const endDt = new Date(`${c.date}T${c.endTime}`);
+        if (now >= endDt) {
+          updates.endTime = '23:59';
+        }
+      }
+      await updateContest(c.id, updates);
+      setContests(prev => prev.map(x => x.id === c.id ? { ...x, ...updates } : x));
       toast.success(`Contest marked as ${newStatus}`);
     } catch (e: any) { toast.error(e.message); }
   }
@@ -205,8 +215,26 @@ export default function ManageContests() {
     }
     setSaving(true);
     try {
-      await updateContest(activatingContest.id, { status: 'Active', contestLink: activateLink.trim() || null } as any);
-      setContests(prev => prev.map(c => c.id === activatingContest.id ? { ...c, status: 'Active' as const, contestLink: activateLink.trim() || undefined } : c));
+      const now = new Date();
+      const endDt = new Date(`${activatingContest.date}T${activatingContest.endTime}`);
+      let newEndTime = activatingContest.endTime;
+      if (now >= endDt) {
+        newEndTime = '23:59';
+      }
+
+      await updateContest(activatingContest.id, {
+        status: 'Active',
+        endTime: newEndTime,
+        contestLink: activateLink.trim() || null
+      } as any);
+
+      setContests(prev => prev.map(c => c.id === activatingContest.id ? {
+        ...c,
+        status: 'Active' as const,
+        endTime: newEndTime,
+        contestLink: activateLink.trim() || undefined
+      } : c));
+
       if (sendAnnouncement) {
         await insertAnnouncement({
           title: `🚨 LIVE MATCH: ${activatingContest.name}`,
