@@ -185,7 +185,7 @@ export default function MyProfile() {
 
       {/* ── ROW 1: Identity card (single card) ── */}
       <Card title="Identity" icon={User}>
-        <div className="flex items-center gap-5">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start text-center sm:text-left gap-4 sm:gap-5">
           <div className="relative shrink-0">
             <div className={`w-20 h-20 rounded-full bg-neon-cyan/10 overflow-hidden flex items-center justify-center ${participant.foundingMember ? 'founding-avatar' : 'border-2 border-neon-cyan/30'}`}>
               {participant.photoURL
@@ -201,9 +201,9 @@ export default function MyProfile() {
             </button>
             <input ref={fileRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1 w-full">
             <div className="font-heading text-white text-base font-bold truncate">{participant.fullName}</div>
-            <div className="flex items-center gap-2 mt-1 flex-wrap">
+            <div className="flex items-center justify-center sm:justify-start gap-2 mt-1 flex-wrap">
               <span className={TIER_CLASS[tier]}>{tier}</span>
               <span className="font-numbers text-[11px] text-text-secondary bg-white/5 px-2 py-0.5 rounded">
                 {participant.participantId}
@@ -214,8 +214,8 @@ export default function MyProfile() {
                 </span>
               )}
             </div>
-            <div className="text-text-secondary text-[11px] mt-1.5">{participant.college}</div>
-            <div className="text-text-secondary/60 text-[10px]">{participant.branch} · {participant.year}</div>
+            <div className="text-text-secondary text-[11px] mt-1.5 truncate">{participant.college}</div>
+            <div className="text-text-secondary/60 text-[10px] truncate">{participant.branch} · {participant.year}</div>
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2 pt-3 border-t border-neon-cyan/10">
@@ -289,7 +289,7 @@ export default function MyProfile() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
         <Card title="Account Details" icon={GraduationCap}>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
 
             {/* Full Name — locked */}
             <div>
@@ -368,7 +368,7 @@ export default function MyProfile() {
             </div>
 
             {/* Phone */}
-            <div className="col-span-2">
+            <div className="col-span-1 sm:col-span-2">
               <label className="flex items-center gap-1.5 text-[10px] text-text-secondary/60 uppercase tracking-wider mb-1">
                 <Phone size={10} className="shrink-0" /> Phone
               </label>
@@ -448,21 +448,23 @@ export default function MyProfile() {
             const val = profiles[p.key] ?? '';
             const handle = extractHandle(p.key, val);
             return (
-              <div key={p.key} className="rounded-xl border border-white/8 p-4 transition-all hover:border-neon-cyan/20"
+              <div key={p.key} className="rounded-xl border border-white/8 p-4 transition-all hover:border-neon-cyan/20 overflow-hidden"
                 style={{ background: p.bg }}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between gap-2 mb-3 min-w-0">
+                  <div className="flex items-center gap-1.5 shrink-0 min-w-0">
                     <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-                    <span className="text-sm font-heading font-bold" style={{ color: p.color }}>{p.label}</span>
-                    {p.required && <span className="text-red-400 text-xs">*</span>}
+                    <span className="text-sm font-heading font-bold truncate" style={{ color: p.color }}>{p.label}</span>
+                    {p.required && <span className="text-red-400 text-xs shrink-0">*</span>}
                   </div>
                   {handle ? (
                     <a href={getCanonicalProfileUrl(p.key, handle)} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-[10px] text-neon-cyan hover:text-white transition-colors">
-                      @{handle} <ExternalLink size={9} />
+                      title={`@${handle}`}
+                      className="flex items-center gap-1 text-[10px] text-neon-cyan hover:text-white transition-colors min-w-0 max-w-[120px] xs:max-w-[150px] sm:max-w-[180px] shrink">
+                      <span className="truncate">@{handle}</span>
+                      <ExternalLink size={9} className="shrink-0" />
                     </a>
                   ) : (
-                    <span className="text-[10px] text-text-secondary/40">not linked</span>
+                    <span className="text-[10px] text-text-secondary/40 shrink-0">not linked</span>
                   )}
                 </div>
                 <input
@@ -484,21 +486,23 @@ export default function MyProfile() {
           const val = profiles[p.key] ?? '';
           const handle = extractHandle(p.key, val);
           return (
-            <div className="rounded-xl border border-white/8 p-4 transition-all hover:border-neon-cyan/20 mt-4"
+            <div className="rounded-xl border border-white/8 p-4 transition-all hover:border-neon-cyan/20 mt-4 overflow-hidden"
               style={{ background: p.bg }}>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between gap-2 mb-3 min-w-0">
+                <div className="flex items-center gap-1.5 shrink-0 min-w-0">
                   <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
-                  <span className="text-sm font-heading font-bold" style={{ color: p.color }}>{p.label}</span>
-                  <span className="text-text-secondary/50 text-[10px]">(optional)</span>
+                  <span className="text-sm font-heading font-bold truncate" style={{ color: p.color }}>{p.label}</span>
+                  <span className="text-text-secondary/50 text-[10px] shrink-0">(optional)</span>
                 </div>
                 {handle ? (
                   <a href={getCanonicalProfileUrl(p.key, handle)} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-[10px] text-neon-cyan hover:text-white transition-colors">
-                    @{handle} <ExternalLink size={9} />
+                    title={`@${handle}`}
+                    className="flex items-center gap-1 text-[10px] text-neon-cyan hover:text-white transition-colors min-w-0 max-w-[140px] xs:max-w-[180px] sm:max-w-[240px] shrink">
+                    <span className="truncate">@{handle}</span>
+                    <ExternalLink size={9} className="shrink-0" />
                   </a>
                 ) : (
-                  <span className="text-[10px] text-text-secondary/40">not linked</span>
+                  <span className="text-[10px] text-text-secondary/40 shrink-0">not linked</span>
                 )}
               </div>
               <input

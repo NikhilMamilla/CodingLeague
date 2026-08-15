@@ -94,48 +94,53 @@ export default function Profile() {
               {profile.github && (
                 <a href={profile.github} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
-                  <Globe size={12} /> GitHub
+                  <Globe size={12} className="shrink-0" /> GitHub
                 </a>
               )}
               {profile.linkedin && (
                 <a href={profile.linkedin} target="_blank" rel="noopener noreferrer"
                   className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
-                  <ExternalLink size={12} /> LinkedIn
+                  <ExternalLink size={12} className="shrink-0" /> LinkedIn
                 </a>
               )}
               {profile.leetcodeUsername && (
                 <a href={getCanonicalProfileUrl('leetcodeUsername', profile.leetcodeUsername)}
                   target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
-                  <ExternalLink size={12} /> LeetCode (@{profile.leetcodeUsername})
+                  title={`LeetCode (@${profile.leetcodeUsername})`}
+                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px] max-w-[180px] sm:max-w-[240px]">
+                  <ExternalLink size={12} className="shrink-0" /> <span className="truncate">LeetCode (@{profile.leetcodeUsername})</span>
                 </a>
               )}
               {profile.codechefUsername && (
                 <a href={getCanonicalProfileUrl('codechefUsername', profile.codechefUsername)}
                   target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
-                  <ExternalLink size={12} /> CodeChef (@{profile.codechefUsername})
+                  title={`CodeChef (@${profile.codechefUsername})`}
+                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px] max-w-[180px] sm:max-w-[240px]">
+                  <ExternalLink size={12} className="shrink-0" /> <span className="truncate">CodeChef (@{profile.codechefUsername})</span>
                 </a>
               )}
               {profile.hackerrankUsername && (
                 <a href={getCanonicalProfileUrl('hackerrankUsername', profile.hackerrankUsername)}
                   target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
-                  <ExternalLink size={12} /> HackerRank (@{profile.hackerrankUsername})
+                  title={`HackerRank (@${profile.hackerrankUsername})`}
+                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px] max-w-[180px] sm:max-w-[240px]">
+                  <ExternalLink size={12} className="shrink-0" /> <span className="truncate">HackerRank (@{profile.hackerrankUsername})</span>
                 </a>
               )}
               {profile.codeforcesHandle && (
                 <a href={getCanonicalProfileUrl('codeforcesHandle', profile.codeforcesHandle)}
                   target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
-                  <ExternalLink size={12} /> Codeforces (@{profile.codeforcesHandle})
+                  title={`Codeforces (@${profile.codeforcesHandle})`}
+                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px] max-w-[180px] sm:max-w-[240px]">
+                  <ExternalLink size={12} className="shrink-0" /> <span className="truncate">Codeforces (@{profile.codeforcesHandle})</span>
                 </a>
               )}
               {profile.gfgUsername && (
                 <a href={getCanonicalProfileUrl('gfgUsername', profile.gfgUsername)}
                   target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px]">
-                  <ExternalLink size={12} /> GeeksforGeeks (@{profile.gfgUsername})
+                  title={`GeeksforGeeks (@${profile.gfgUsername})`}
+                  className="flex items-center gap-1 text-text-secondary hover:text-neon-cyan transition-colors text-[10px] max-w-[180px] sm:max-w-[240px]">
+                  <ExternalLink size={12} className="shrink-0" /> <span className="truncate">GeeksforGeeks (@{profile.gfgUsername})</span>
                 </a>
               )}
             </div>

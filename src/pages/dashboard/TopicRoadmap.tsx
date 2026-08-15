@@ -97,18 +97,18 @@ export default function TopicRoadmap() {
       </div>
 
       {/* Progress Summary — online weeks only */}
-      <div className="grid grid-cols-3 gap-4">
-        <div className="card text-center py-4">
-          <div className="stat-number text-2xl text-success">{confident}</div>
-          <div className="text-text-secondary/60 text-[10px] uppercase tracking-wider mt-0.5">Confident</div>
+      <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
+        <div className="card text-center py-3 sm:py-4 px-2 sm:px-4">
+          <div className="stat-number text-xl sm:text-2xl text-success">{confident}</div>
+          <div className="text-text-secondary/60 text-[9px] sm:text-[10px] uppercase tracking-wider mt-0.5">Confident</div>
         </div>
-        <div className="card text-center py-4">
-          <div className="stat-number text-2xl text-warning">{practicing}</div>
-          <div className="text-text-secondary/60 text-[10px] uppercase tracking-wider mt-0.5">Practicing</div>
+        <div className="card text-center py-3 sm:py-4 px-2 sm:px-4">
+          <div className="stat-number text-xl sm:text-2xl text-warning">{practicing}</div>
+          <div className="text-text-secondary/60 text-[9px] sm:text-[10px] uppercase tracking-wider mt-0.5">Practicing</div>
         </div>
-        <div className="card text-center py-4">
-          <div className="stat-number text-2xl text-text-secondary">{total - confident - practicing}</div>
-          <div className="text-text-secondary/60 text-[10px] uppercase tracking-wider mt-0.5">Not Started</div>
+        <div className="card text-center py-3 sm:py-4 px-2 sm:px-4">
+          <div className="stat-number text-xl sm:text-2xl text-text-secondary">{total - confident - practicing}</div>
+          <div className="text-text-secondary/60 text-[9px] sm:text-[10px] uppercase tracking-wider mt-0.5">Not Started</div>
         </div>
       </div>
 
@@ -126,7 +126,7 @@ export default function TopicRoadmap() {
             style={{ width: `${total > 0 ? Math.round(((confident + practicing * 0.5) / total) * 100) : 0}%` }}
           />
         </div>
-        <div className="flex items-center gap-4 mt-2">
+        <div className="flex items-center gap-2.5 sm:gap-4 mt-2 flex-wrap">
           <span className="flex items-center gap-1 text-[10px] text-success"><span className="w-2 h-2 rounded-full bg-success inline-block" /> Confident</span>
           <span className="flex items-center gap-1 text-[10px] text-warning"><span className="w-2 h-2 rounded-full bg-warning inline-block" /> Practicing</span>
           <span className="flex items-center gap-1 text-[10px] text-text-secondary/50"><span className="w-2 h-2 rounded-full bg-white/20 inline-block" /> Not Started</span>
@@ -151,7 +151,7 @@ export default function TopicRoadmap() {
               </div>
 
               {/* Week cards */}
-              <div className="space-y-2.5 pl-2">
+              <div className="space-y-2.5 sm:pl-2">
                 {monthWeeks.map(w => {
                   const contest       = getContestForWeek(w.week);
                   const isCurrentWeek = w.week === activeWeek;
@@ -163,49 +163,51 @@ export default function TopicRoadmap() {
                   if (w.isGrandTest) {
                     // ── Grand Test card ─────────────────────────────────
                     return (
-                      <div key={w.week} className={`relative rounded-xl border-2 border-gold/40 bg-gold/[0.04] p-4 transition-all ${
+                      <div key={w.week} className={`relative rounded-xl border-2 border-gold/40 bg-gold/[0.04] p-3.5 sm:p-4 transition-all ${
                         isCurrentWeek ? 'shadow-[0_0_20px_rgba(255,215,0,0.1)]' : ''
                       }`}>
                         {isCurrentWeek && (
-                          <span className="absolute -top-2.5 left-4 px-2 py-0.5 bg-gold text-midnight text-[9px] font-heading font-bold rounded uppercase tracking-widest">
+                          <span className="absolute -top-2.5 left-4 px-2 py-0.5 bg-gold text-midnight text-[9px] font-heading font-bold rounded uppercase tracking-widest z-10">
                             ← Now
                           </span>
                         )}
-                        <div className="flex items-start gap-3">
-                          {/* Week badge */}
-                          <div className="w-12 h-12 rounded-xl bg-gold/10 border border-gold/30 flex flex-col items-center justify-center shrink-0">
-                            <span className="text-xs font-numbers font-bold text-gold leading-none">W{w.week}</span>
-                            <span className="text-[8px] text-gold/60 mt-0.5">C{w.week}</span>
-                          </div>
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                          <div className="flex items-start gap-3 flex-1 min-w-0">
+                            {/* Week badge */}
+                            <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gold/10 border border-gold/30 flex flex-col items-center justify-center shrink-0">
+                              <span className="text-xs font-numbers font-bold text-gold leading-none">W{w.week}</span>
+                              <span className="text-[8px] text-gold/60 mt-0.5">C{w.week}</span>
+                            </div>
 
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className="text-lg">{w.icon}</span>
-                              <span className="font-heading font-bold text-gold text-sm">Offline Monthly Grand Test</span>
-                              <span className="flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full bg-gold/10 border border-gold/30 text-gold font-bold">
-                                <MapPin size={9} /> Offline
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5 mb-2">
-                              {w.focusAreas.map(f => (
-                                <span key={f} className="text-[9px] px-2 py-0.5 rounded-full border bg-gold/5 border-gold/20 text-gold/70">
-                                  {f}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="text-base sm:text-lg">{w.icon}</span>
+                                <span className="font-heading font-bold text-gold text-xs sm:text-sm">Offline Monthly Grand Test</span>
+                                <span className="flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full bg-gold/10 border border-gold/30 text-gold font-bold">
+                                  <MapPin size={9} /> Offline
                                 </span>
-                              ))}
-                            </div>
-                            <div className="flex items-center gap-3 text-[10px] text-gold/60 flex-wrap">
-                              <span className="flex items-center gap-1"><Calendar size={9} /> {w.date}</span>
-                              {contest && (
-                                <span className={`px-1.5 py-0.5 rounded border font-bold text-[9px] ${
-                                  contest.status === 'Active'
-                                    ? 'bg-success/10 border-success/30 text-success animate-pulse'
-                                    : contest.status === 'Upcoming'
-                                    ? 'bg-warning/10 border-warning/30 text-warning'
-                                    : 'bg-white/5 border-white/10 text-text-secondary/50'
-                                }`}>
-                                  {contest.status === 'Active' ? '🔴 LIVE' : contest.status}
-                                </span>
-                              )}
+                              </div>
+                              <div className="flex flex-wrap gap-1.5 mb-1.5">
+                                {w.focusAreas.map(f => (
+                                  <span key={f} className="text-[9px] px-2 py-0.5 rounded-full border bg-gold/5 border-gold/20 text-gold/70">
+                                    {f}
+                                  </span>
+                                ))}
+                              </div>
+                              <div className="flex items-center gap-3 text-[10px] text-gold/60 flex-wrap">
+                                <span className="flex items-center gap-1"><Calendar size={9} /> {w.date}</span>
+                                {contest && (
+                                  <span className={`px-1.5 py-0.5 rounded border font-bold text-[9px] ${
+                                    contest.status === 'Active'
+                                      ? 'bg-success/10 border-success/30 text-success animate-pulse'
+                                      : contest.status === 'Upcoming'
+                                      ? 'bg-warning/10 border-warning/30 text-warning'
+                                      : 'bg-white/5 border-white/10 text-text-secondary/50'
+                                  }`}>
+                                    {contest.status === 'Active' ? '🔴 LIVE' : contest.status}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -221,72 +223,75 @@ export default function TopicRoadmap() {
                         : 'border-white/8 bg-white/[0.01] hover:border-white/15 hover:bg-white/[0.02]'
                     }`}>
                       {isCurrentWeek && (
-                        <span className="absolute -top-2.5 left-4 px-2 py-0.5 bg-neon-cyan text-midnight text-[9px] font-heading font-bold rounded uppercase tracking-widest">
+                        <span className="absolute -top-2.5 left-4 px-2 py-0.5 bg-neon-cyan text-midnight text-[9px] font-heading font-bold rounded uppercase tracking-widest z-10">
                           ← Current Week
                         </span>
                       )}
 
-                      <div className="flex items-start gap-3 p-4">
-                        {/* Week / contest number badge */}
-                        <div className={`w-12 h-12 rounded-xl flex flex-col items-center justify-center shrink-0 border ${
-                          isCurrentWeek
-                            ? 'bg-neon-cyan/15 border-neon-cyan/30'
-                            : 'bg-white/5 border-white/10'
-                        }`}>
-                          <span className={`text-xl leading-none`}>{w.icon}</span>
-                          <span className={`text-[8px] font-numbers font-bold mt-0.5 ${isCurrentWeek ? 'text-neon-cyan' : 'text-text-secondary/50'}`}>
-                            W{w.week}
-                          </span>
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 sm:p-4">
+                        {/* Left: Icon + Content */}
+                        <div className="flex items-start gap-3 flex-1 min-w-0 w-full sm:w-auto">
+                          {/* Week / contest number badge */}
+                          <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex flex-col items-center justify-center shrink-0 border ${
+                            isCurrentWeek
+                              ? 'bg-neon-cyan/15 border-neon-cyan/30'
+                              : 'bg-white/5 border-white/10'
+                          }`}>
+                            <span className="text-lg sm:text-xl leading-none">{w.icon}</span>
+                            <span className={`text-[8px] font-numbers font-bold mt-0.5 ${isCurrentWeek ? 'text-neon-cyan' : 'text-text-secondary/50'}`}>
+                              W{w.week}
+                            </span>
+                          </div>
+
+                          {/* Content */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                              <span className={`font-heading font-bold text-xs sm:text-sm ${isCurrentWeek ? 'text-white' : 'text-white/85'}`}>
+                                {w.topic}
+                              </span>
+                              <span className="flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan/70">
+                                <Wifi size={8} /> Online
+                              </span>
+                              {contest && (
+                                <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${
+                                  contest.status === 'Active'
+                                    ? 'bg-success/10 border-success/30 text-success animate-pulse'
+                                    : contest.status === 'Upcoming'
+                                    ? 'bg-warning/10 border-warning/30 text-warning'
+                                    : 'bg-white/5 border-white/10 text-text-secondary/40'
+                                }`}>
+                                  {contest.status === 'Active' ? '🔴 LIVE' : contest.status}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Focus area tags */}
+                            <div className="flex flex-wrap gap-1 mb-1.5">
+                              {w.focusAreas.map(f => (
+                                <span key={f} className={`text-[9px] px-2 py-0.5 rounded-full border ${
+                                  isCurrentWeek
+                                    ? 'bg-neon-cyan/10 border-neon-cyan/20 text-neon-cyan/80'
+                                    : 'bg-white/5 border-white/10 text-text-secondary/55'
+                                }`}>
+                                  {f}
+                                </span>
+                              ))}
+                            </div>
+
+                            {/* Date + contest name row */}
+                            <div className="flex items-center gap-2.5 text-[10px] text-text-secondary/50 flex-wrap">
+                              <span className="flex items-center gap-1"><Calendar size={9} /> {w.date}</span>
+                              {contest && (
+                                <span className="text-text-secondary/40 truncate max-w-[180px] sm:max-w-[200px]">{contest.name}</span>
+                              )}
+                            </div>
+                          </div>
                         </div>
 
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className={`font-heading font-bold text-sm ${isCurrentWeek ? 'text-white' : 'text-white/85'}`}>
-                              {w.topic}
-                            </span>
-                            <span className="flex items-center gap-1 text-[9px] px-2 py-0.5 rounded-full bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan/70">
-                              <Wifi size={8} /> Online
-                            </span>
-                            {contest && (
-                              <span className={`text-[9px] px-1.5 py-0.5 rounded border font-bold ${
-                                contest.status === 'Active'
-                                  ? 'bg-success/10 border-success/30 text-success animate-pulse'
-                                  : contest.status === 'Upcoming'
-                                  ? 'bg-warning/10 border-warning/30 text-warning'
-                                  : 'bg-white/5 border-white/10 text-text-secondary/40'
-                              }`}>
-                                {contest.status === 'Active' ? '🔴 LIVE' : contest.status}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Focus area tags */}
-                          <div className="flex flex-wrap gap-1 mb-2">
-                            {w.focusAreas.map(f => (
-                              <span key={f} className={`text-[9px] px-2 py-0.5 rounded-full border ${
-                                isCurrentWeek
-                                  ? 'bg-neon-cyan/10 border-neon-cyan/20 text-neon-cyan/80'
-                                  : 'bg-white/5 border-white/10 text-text-secondary/55'
-                              }`}>
-                                {f}
-                              </span>
-                            ))}
-                          </div>
-
-                          {/* Date + contest name row */}
-                          <div className="flex items-center gap-3 text-[10px] text-text-secondary/50 flex-wrap">
-                            <span className="flex items-center gap-1"><Calendar size={9} /> {w.date}</span>
-                            {contest && (
-                              <span className="text-text-secondary/40 truncate max-w-[200px]">{contest.name}</span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Right side: practice links + progress toggle */}
-                        <div className="flex flex-col items-end gap-2 shrink-0">
+                        {/* Right: practice links + progress toggle */}
+                        <div className="flex items-center sm:flex-col sm:items-end justify-between w-full sm:w-auto gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-white/5">
                           {/* Practice links */}
-                          {links && (
+                          {links ? (
                             <div className="flex items-center gap-1.5">
                               {links.leetcode && (
                                 <a href={links.leetcode} target="_blank" rel="noopener noreferrer"
@@ -301,7 +306,7 @@ export default function TopicRoadmap() {
                                 </a>
                               )}
                             </div>
-                          )}
+                          ) : <div />}
 
                           {/* Progress toggle */}
                           <button
@@ -310,7 +315,7 @@ export default function TopicRoadmap() {
                             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-medium transition-colors ${pCfg.bg} ${pCfg.color}`}
                           >
                             <PIcon size={11} />
-                            <span className="hidden sm:inline">{pCfg.label}</span>
+                            <span>{pCfg.label}</span>
                           </button>
                         </div>
                       </div>

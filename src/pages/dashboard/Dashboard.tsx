@@ -35,29 +35,29 @@ const PLATFORM_CFG = [
   { key: 'gfgUsername',        label: 'GeeksforGeeks', color: '#2F8D46' },
 ] as const;
 
-function StatCard({ icon: Icon, label, value, color = 'text-neon-cyan', infoText }: {
-  icon: React.ElementType; label: string; value: string | number; color?: string; infoText?: string;
+function StatCard({ icon: Icon, label, value, color = 'text-neon-cyan', infoText, className = '' }: {
+  icon: React.ElementType; label: string; value: string | number; color?: string; infoText?: string; className?: string;
 }) {
   return (
-    <div className="card flex items-center gap-4 py-4">
-      <div className="w-10 h-10 rounded-lg bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center shrink-0">
+    <div className={`card flex items-center gap-2.5 sm:gap-4 p-3.5 sm:p-4 ${className}`}>
+      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center shrink-0">
         <Icon size={17} className={color} />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <div className="text-text-secondary text-[10px] uppercase tracking-widest">{label}</div>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="text-text-secondary text-[10px] uppercase tracking-wider truncate">{label}</div>
           {infoText && (
             <button
               type="button"
               aria-label={`More info about ${label}`}
               title={infoText}
-              className="inline-flex items-center justify-center w-4 h-4 rounded-full border border-neon-cyan/30 text-[10px] text-neon-cyan/80 hover:bg-neon-cyan/10 transition-colors"
+              className="inline-flex items-center justify-center w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full border border-neon-cyan/30 text-[9px] sm:text-[10px] text-neon-cyan/80 hover:bg-neon-cyan/10 transition-colors shrink-0"
             >
               <Info size={10} />
             </button>
           )}
         </div>
-        <div className={`stat-number text-xl ${color}`}>{value}</div>
+        <div className={`stat-number text-lg sm:text-xl ${color} whitespace-nowrap`}>{value}</div>
       </div>
     </div>
   );
@@ -280,22 +280,22 @@ export default function Dashboard() {
 
       {/* ── Community Banner (once per session, dismissible) ── */}
       {announcementWhatsapp && !whatsappDismissed && (
-        <div className="relative bg-card-dark border border-neon-cyan/25 rounded-xl p-4 md:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-start gap-3 flex-1">
-            <div className="w-9 h-9 rounded-lg bg-neon-cyan/10 border border-neon-cyan/30 flex items-center justify-center shrink-0 mt-0.5">
-              <Users size={16} className="text-neon-cyan" />
+        <div className="relative bg-card-dark border border-neon-cyan/25 rounded-xl p-4 md:p-5 flex flex-col sm:flex-row items-center sm:items-center justify-between gap-3.5 text-center sm:text-left">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 flex-1">
+            <div className="w-10 h-10 rounded-lg bg-neon-cyan/10 border border-neon-cyan/30 flex items-center justify-center shrink-0">
+              <Users size={18} className="text-neon-cyan" />
             </div>
             <div>
-              <p className="text-white text-xs font-semibold">Join our Official CWCL WhatsApp Announcement Community</p>
-              <p className="text-text-secondary text-[11px] mt-0.5">Receive contest updates, results, and important notifications directly.</p>
+              <p className="text-white text-xs sm:text-sm font-semibold">Join our Official CWCL WhatsApp Announcement Community</p>
+              <p className="text-text-secondary text-[11px] sm:text-xs mt-0.5">Receive contest updates, results, and important notifications directly.</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center justify-center gap-2 w-full sm:w-auto shrink-0 pt-1 sm:pt-0">
             <a
               href={announcementWhatsapp} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-neon-cyan text-midnight font-heading font-bold text-[10px] uppercase tracking-widest hover:shadow-[0_0_15px_rgba(0,229,255,0.4)] transition-all active:scale-95"
+              className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-2.5 rounded-lg bg-neon-cyan text-midnight font-heading font-bold text-xs uppercase tracking-wider hover:shadow-[0_0_15px_rgba(0,229,255,0.4)] transition-all active:scale-95"
             >
-              <Send size={11} /> Join Now
+              <Send size={12} /> Join Now
             </a>
             <button
               onClick={() => {
@@ -310,7 +310,7 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <StatCard
           icon={TrendingUp}
           label="Rating"
@@ -327,27 +327,28 @@ export default function Dashboard() {
           value={`${foundingSlots.claimed} / ${foundingSlots.max}`}
           color={foundingSlots.claimed >= foundingSlots.max ? 'text-text-secondary' : 'text-gold'}
           infoText="Limited founding member slots for the inaugural season. First come, first served."
+          className="col-span-2 sm:col-span-1 md:col-span-1 lg:col-span-1"
         />
       </div>
 
       {/* ── Community Banner (Always shown after stat cards) ── */}
       {announcementWhatsapp && (
-        <div className="relative bg-card-dark border border-neon-cyan/25 rounded-xl p-4 md:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex items-start gap-3 flex-1">
-            <div className="w-9 h-9 rounded-lg bg-neon-cyan/10 border border-neon-cyan/30 flex items-center justify-center shrink-0 mt-0.5">
-              <Users size={16} className="text-neon-cyan" />
+        <div className="relative bg-card-dark border border-neon-cyan/25 rounded-xl p-4 md:p-5 flex flex-col sm:flex-row items-center sm:items-center justify-between gap-3.5 text-center sm:text-left">
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 flex-1">
+            <div className="w-10 h-10 rounded-lg bg-neon-cyan/10 border border-neon-cyan/30 flex items-center justify-center shrink-0">
+              <Users size={18} className="text-neon-cyan" />
             </div>
             <div>
-              <p className="text-white text-xs font-semibold">Join our Official CWCL WhatsApp Announcement Community</p>
-              <p className="text-text-secondary text-[11px] mt-0.5">Receive contest updates, results, and important notifications directly.</p>
+              <p className="text-white text-xs sm:text-sm font-semibold">Join our Official CWCL WhatsApp Announcement Community</p>
+              <p className="text-text-secondary text-[11px] sm:text-xs mt-0.5">Receive contest updates, results, and important notifications directly.</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center justify-center gap-2 w-full sm:w-auto shrink-0 pt-1 sm:pt-0">
             <a
               href={announcementWhatsapp} target="_blank" rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-neon-cyan text-midnight font-heading font-bold text-[10px] uppercase tracking-widest hover:shadow-[0_0_15px_rgba(0,229,255,0.4)] transition-all active:scale-95"
+              className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-2.5 rounded-lg bg-neon-cyan text-midnight font-heading font-bold text-xs uppercase tracking-wider hover:shadow-[0_0_15px_rgba(0,229,255,0.4)] transition-all active:scale-95"
             >
-              <Send size={11} /> Join Now
+              <Send size={12} /> Join Now
             </a>
           </div>
         </div>
@@ -365,58 +366,62 @@ export default function Dashboard() {
         return (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* This Week's Topic Card */}
-            <div className="lg:col-span-2 card border-neon-cyan/30 bg-neon-cyan/[0.02]">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center">
-                    <BookOpen size={13} className="text-neon-cyan" />
+            <div className="lg:col-span-2 card border-neon-cyan/30 bg-neon-cyan/[0.02] flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 rounded-lg bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center shrink-0">
+                      <BookOpen size={13} className="text-neon-cyan" />
+                    </div>
+                    <h2 className="heading-sm !text-sm truncate">
+                      {isLive ? '🔴 Live Contest Topic' : "This Week's Topic"}
+                    </h2>
                   </div>
-                  <h2 className="heading-sm !text-sm">
-                    {isLive ? '🔴 Live Contest Topic' : "This Week's Topic"}
-                  </h2>
+                  <Link to="/dashboard/roadmap" className="text-neon-cyan text-xs hover:underline flex items-center gap-1 shrink-0 ml-auto whitespace-nowrap">
+                    Full Roadmap <ChevronRight size={11} />
+                  </Link>
                 </div>
-                <Link to="/dashboard/roadmap" className="text-neon-cyan text-xs hover:underline flex items-center gap-1">
-                  Full Roadmap <ChevronRight size={11} />
-                </Link>
-              </div>
 
-              <div className="flex items-start gap-4">
-                <div className="text-4xl shrink-0">{display.icon}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-heading text-white text-base font-bold leading-tight">{display.topic}</div>
-                  <div className="text-text-secondary/60 text-[11px] mt-0.5 flex items-center gap-2 flex-wrap">
-                    <span className="bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan px-2 py-0.5 rounded font-bold text-[10px]">
-                      Week {weekNum} · Contest {weekNum}
-                    </span>
-                    {referenceContest && (
-                      <span className="text-text-secondary/50">{referenceContest.name}</span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {display.focusAreas.map(f => (
-                      <span key={f} className="text-[10px] px-2 py-0.5 rounded-full bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan/80">
-                        {f}
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="text-3xl sm:text-4xl shrink-0 mt-0.5">{display.icon}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-heading text-white text-sm sm:text-base font-bold leading-tight">{display.topic}</div>
+                    <div className="text-text-secondary/60 text-[11px] mt-1 flex items-center gap-2 flex-wrap">
+                      <span className="bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan px-2 py-0.5 rounded font-bold text-[10px] whitespace-nowrap">
+                        Week {weekNum} · Contest {weekNum}
                       </span>
-                    ))}
+                      {referenceContest && (
+                        <span className="text-text-secondary/50 truncate max-w-full">{referenceContest.name}</span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mt-2.5">
+                      {display.focusAreas.map(f => (
+                        <span key={f} className="text-[10px] px-2.5 py-0.5 rounded-full bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan/90 font-medium">
+                          {f}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {links && (
-                <div className="flex items-center gap-2 mt-4 pt-3 border-t border-white/5">
-                  <span className="text-[10px] text-text-secondary/50 uppercase tracking-wider mr-1">Practice Now:</span>
-                  {links.leetcode && (
-                    <a href={links.leetcode} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFA116]/10 border border-[#FFA116]/20 text-[#FFA116] text-[11px] font-medium hover:bg-[#FFA116]/20 transition-colors">
-                      LeetCode <ExternalLink size={10} />
-                    </a>
-                  )}
-                  {links.gfg && (
-                    <a href={links.gfg} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2F8D46]/10 border border-[#2F8D46]/20 text-[#2F8D46] text-[11px] font-medium hover:bg-[#2F8D46]/20 transition-colors">
-                      GeeksforGeeks <ExternalLink size={10} />
-                    </a>
-                  )}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 mt-4 pt-3 border-t border-white/5">
+                  <span className="text-[10px] text-text-secondary/50 uppercase tracking-wider shrink-0">Practice Now:</span>
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    {links.leetcode && (
+                      <a href={links.leetcode} target="_blank" rel="noopener noreferrer"
+                        className="flex-1 sm:flex-none justify-center flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#FFA116]/10 border border-[#FFA116]/20 text-[#FFA116] text-[11px] font-medium hover:bg-[#FFA116]/20 transition-colors">
+                        LeetCode <ExternalLink size={10} />
+                      </a>
+                    )}
+                    {links.gfg && (
+                      <a href={links.gfg} target="_blank" rel="noopener noreferrer"
+                        className="flex-1 sm:flex-none justify-center flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#2F8D46]/10 border border-[#2F8D46]/20 text-[#2F8D46] text-[11px] font-medium hover:bg-[#2F8D46]/20 transition-colors">
+                        GeeksforGeeks <ExternalLink size={10} />
+                      </a>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

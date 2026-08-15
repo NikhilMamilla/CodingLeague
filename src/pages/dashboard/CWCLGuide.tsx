@@ -243,10 +243,10 @@ export default function CWCLGuide() {
             <div className="text-white text-sm font-semibold mt-1">Online Contest</div>
             <div className="text-text-secondary text-[11px] mt-1">HackerRank / CF</div>
           </div>
-          <div className="card p-3 text-center border-neon-cyan/30 bg-neon-cyan/5">
-            <div className="text-xs font-bold text-neon-cyan uppercase">Week 2</div>
-            <div className="text-white text-sm font-semibold mt-1">Offline Contest</div>
-            <div className="text-text-secondary text-[11px] mt-1">BVRIT Campus Venue</div>
+          <div className="card p-3 text-center border-electric-blue/30 bg-electric-blue/5">
+            <div className="text-xs font-bold text-electric-blue uppercase">Week 2</div>
+            <div className="text-white text-sm font-semibold mt-1">Online Contest</div>
+            <div className="text-text-secondary text-[11px] mt-1">HackerRank / Platform</div>
           </div>
           <div className="card p-3 text-center border-electric-blue/30 bg-electric-blue/5">
             <div className="text-xs font-bold text-electric-blue uppercase">Week 3</div>

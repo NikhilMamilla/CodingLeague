@@ -162,10 +162,12 @@ export default function Navbar() {
               key={l.to}
               className="w-full max-w-xs"
               style={{
-                transitionDelay: mobileOpen ? `${i * 40}ms` : '0ms',
                 transform: mobileOpen ? 'translateY(0)' : 'translateY(16px)',
                 opacity: mobileOpen ? 1 : 0,
-                transition: 'transform 0.3s ease, opacity 0.3s ease',
+                transitionProperty: 'transform, opacity',
+                transitionDuration: '300ms',
+                transitionTimingFunction: 'ease',
+                transitionDelay: mobileOpen ? `${i * 40}ms` : '0ms',
               }}
             >
               <NavLink
@@ -189,10 +191,12 @@ export default function Navbar() {
         <div
           className="mt-8 flex flex-col items-center gap-3 w-full max-w-xs px-8"
           style={{
-            transitionDelay: mobileOpen ? `${NAV_LINKS.length * 40 + 20}ms` : '0ms',
             transform: mobileOpen ? 'translateY(0)' : 'translateY(16px)',
             opacity: mobileOpen ? 1 : 0,
-            transition: 'transform 0.3s ease, opacity 0.3s ease',
+            transitionProperty: 'transform, opacity',
+            transitionDuration: '300ms',
+            transitionTimingFunction: 'ease',
+            transitionDelay: mobileOpen ? `${NAV_LINKS.length * 40 + 20}ms` : '0ms',
           }}
         >
           <div className="w-full h-px bg-neon-cyan/10" />
