@@ -140,14 +140,76 @@ export async function getParticipantByUid(uid: string): Promise<Participant | nu
   return rowToParticipant(data);
 }
 
+// ── Module-level cache for getParticipants (admin use) ───────────────────────
+// Keyed by limit, 30-second TTL. Admin-only callers don't need long freshness.
+const _participantsCache     = new Map<number, { data: Participant[]; time: number }>();
+const _participantsPromises  = new Map<number, Promise<Participant[]>>();
+
 export async function getParticipants(limit = 0): Promise<Participant[]> {
-  let query = supabase.from('participants').select('*')
-    .order('monthly_points', { ascending: false })
-    .order('rating', { ascending: false });
-  if (limit > 0) query = query.limit(limit);
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(rowToParticipant);
+  const now    = Date.now();
+  const cached = _participantsCache.get(limit);
+  if (cached && now - cached.time < 30_000) return cached.data;
+
+  const inflight = _participantsPromises.get(limit);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    // Explicit column list — union of all fields consumed across callers:
+    //   ImportResults: uid, participant_id, full_name, college, rating, streak,
+    //                  contests_participated, monthly_points, peak_rating,
+    //                  rating_history, badges, codeforces_handle, leetcode_username,
+    //                  codechef_username, hackerrank_username, gfg_username
+    //   FoundingMembersAdmin: + email, phone, branch, year, photo_url, role,
+    //                           founding_member, founding_rank, founding_awarded_at,
+    //                           founding_season_id, created_at
+    //   FoundingMemberSettings: (subset of above)
+    //   ManageBadges: (subset of above)
+    // Excluded (never accessed): bio, github, linkedin, city, state, university,
+    //   email_verified, peak_title, last_contest_date, attendance, tier,
+    //   *_url (profile URL variants — only needed on public Profile page)
+    const cols = [
+      'uid', 'participant_id', 'full_name', 'email', 'phone',
+      'photo_url', 'role', 'college', 'branch', 'year',
+      'rating', 'peak_rating', 'streak', 'monthly_points',
+      'contests_participated', 'badges', 'rating_history',
+      'founding_member', 'founding_rank', 'founding_awarded_at',
+      'founding_season_id', 'created_at',
+      'codeforces_handle', 'leetcode_username', 'codechef_username',
+      'hackerrank_username', 'gfg_username',
+    ].join(', ');
+
+    let query = supabase.from('participants').select(cols)
+      .order('monthly_points', { ascending: false })
+      .order('rating',         { ascending: false });
+    if (limit > 0) query = query.limit(limit);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    const result = (data ?? []).map(rowToParticipant);
+    _participantsCache.set(limit, { data: result, time: Date.now() });
+    return result;
+  })();
+
+  _participantsPromises.set(limit, promise);
+  try {
+    return await promise;
+  } catch (err) {
+    // Remove failed cache entry so a later call can retry
+    _participantsCache.delete(limit);
+    throw err;
+  } finally {
+    _participantsPromises.delete(limit);
+  }
+}
+
+/** Invalidate the getParticipants cache. Call after any write that mutates participant rows. */
+export function invalidateParticipantsCache(limit?: number): void {
+  if (limit !== undefined) {
+    _participantsCache.delete(limit);
+    _participantsPromises.delete(limit);
+  } else {
+    _participantsCache.clear();
+    _participantsPromises.clear();
+  }
 }
 
 // ── Module-level cache for getBasicParticipants ───────────────────────────────
@@ -194,16 +256,50 @@ export async function getBasicParticipants(): Promise<Participant[]> {
 }
 
 export async function getParticipantsLatestFirst(limit = 10000): Promise<Participant[]> {
-  let query = supabase.from('participants').select('*').order('participant_id', { ascending: false });
+  const cols = 'uid, participant_id, full_name, email, college, branch, year, tier, rating, contests_participated, badges, role';
+  let query = supabase.from('participants').select(cols).order('participant_id', { ascending: false });
   if (limit > 0) query = query.limit(limit);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []).map(rowToParticipant);
 }
 
+let _foundingMembersCache:     Participant[] | null = null;
+let _foundingMembersCacheTime: number              = 0;
+let _foundingMembersPromise:   Promise<Participant[]> | null = null;
+
 export async function getFoundingMembers(): Promise<Participant[]> {
-  const { data } = await supabase.from('participants').select('*').eq('founding_member', true).order('founding_rank', { ascending: true });
-  return (data ?? []).map(rowToParticipant);
+  const now = Date.now();
+  if (_foundingMembersCache && now - _foundingMembersCacheTime < 60_000) return _foundingMembersCache;
+  if (_foundingMembersPromise) return _foundingMembersPromise;
+
+  _foundingMembersPromise = (async () => {
+    // Columns consumed by FoundingMembers.tsx (the only caller):
+    //   uid              — React key
+    //   participant_id   — display + search + profile link
+    //   full_name        — display + avatar initial + search
+    //   college          — display + search
+    //   photo_url        — avatar image
+    //   founding_rank    — rank badge
+    //   founding_season_id — header subtitle
+    //   created_at       — join date display
+    const cols = 'uid, participant_id, full_name, college, photo_url, founding_rank, founding_season_id, created_at';
+    const { data } = await supabase
+      .from('participants')
+      .select(cols)
+      .eq('founding_member', true)
+      .order('founding_rank', { ascending: true });
+    const result = (data ?? []).map(rowToParticipant);
+    _foundingMembersCache     = result;
+    _foundingMembersCacheTime = Date.now();
+    return result;
+  })();
+
+  try {
+    return await _foundingMembersPromise;
+  } finally {
+    _foundingMembersPromise = null;
+  }
 }
 
 export async function upsertParticipant(p: Partial<Participant> & { uid: string }): Promise<void> {
@@ -482,16 +578,20 @@ export async function getCertificates(): Promise<Certificate[]> {
 }
 
 export async function getCertificatesByParticipant(participantId: string): Promise<Certificate[]> {
-  const { data } = await supabase.from('certificates').select('*').eq('participant_id', participantId);
+  const { data } = await supabase
+    .from('certificates')
+    .select('id, certificate_id, participant_id, participant_name, certificate_type, contest_name, season, position, issued_date, cloudinary_url, status, created_at, verification_code')
+    .eq('participant_id', participantId);
   return (data ?? []).map(rowToCertificate);
 }
 
 export async function getCertificateByCode(code: string): Promise<Certificate | null> {
-  const { data: d1 } = await supabase.from('certificates').select('*').eq('certificate_id', code).maybeSingle();
+  const cols = 'id, certificate_id, participant_id, participant_name, email, certificate_type, contest_name, season, position, issued_date, issued_by, cloudinary_url, verification_code, status';
+  const { data: d1 } = await supabase.from('certificates').select(cols).eq('certificate_id', code).maybeSingle();
   if (d1) return rowToCertificate(d1);
-  const { data: d2 } = await supabase.from('certificates').select('*').eq('verification_code', code).maybeSingle();
+  const { data: d2 } = await supabase.from('certificates').select(cols).eq('verification_code', code).maybeSingle();
   if (d2) return rowToCertificate(d2);
-  const { data: d3 } = await supabase.from('certificates').select('*').eq('id', code).maybeSingle();
+  const { data: d3 } = await supabase.from('certificates').select(cols).eq('id', code).maybeSingle();
   return d3 ? rowToCertificate(d3) : null;
 }
 

@@ -21,10 +21,19 @@ export default function Profile() {
     setLoading(true);
     (async () => {
       try {
-        const { data } = await supabase.from('participants').select('*').eq('participant_id', participantId).maybeSingle();
+        const { data } = await supabase
+          .from('participants')
+          .select('uid, participant_id, full_name, photo_url, bio, college, branch, year, rating, peak_rating, contests_participated, attendance, badges, tier, github, linkedin, leetcode_username, codechef_username, hackerrank_username, codeforces_handle, gfg_username')
+          .eq('participant_id', participantId)
+          .maybeSingle();
         if (!data) { setNotFound(true); setLoading(false); return; }
         setProfile(rowToParticipant(data));
-        const { data: rData } = await supabase.from('contest_results').select('*').eq('participant_id', participantId).order('imported_at', { ascending: false }).limit(20);
+        const { data: rData } = await supabase
+          .from('contest_results')
+          .select('id, contest_id, contest_name, rank, score, league_points, rating_before, rating_after, imported_at')
+          .eq('participant_id', participantId)
+          .order('imported_at', { ascending: false })
+          .limit(20);
         setResults((rData ?? []).map(rowToResult));
       } catch { setNotFound(true); }
       finally { setLoading(false); }

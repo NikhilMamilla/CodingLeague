@@ -92,7 +92,7 @@ export default function SeedContests() {
 
   async function checkExisting() {
     setStatus('checking');
-    const { count } = await supabase.from('contests').select('*', { count: 'exact', head: true });
+    const { count } = await supabase.from('contests').select('id', { count: 'exact', head: true });
     setExisting(count ?? 0);
     setStatus('idle');
     if ((count ?? 0) > 0) {

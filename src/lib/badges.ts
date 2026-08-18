@@ -28,11 +28,18 @@ function computeNewBadges(results: ContestResult[], participant: Participant): B
 }
 
 export async function evaluateAndAwardBadges(uid: string): Promise<BadgeType[]> {
-  const { data: pRow } = await supabase.from('participants').select('*').eq('uid', uid).single();
+  const { data: pRow } = await supabase
+    .from('participants')
+    .select('uid, participant_id, badges')
+    .eq('uid', uid)
+    .single();
   if (!pRow) return [];
   const participant = rowToParticipant(pRow);
 
-  const { data: rRows } = await supabase.from('contest_results').select('*').eq('participant_id', participant.participantId);
+  const { data: rRows } = await supabase
+    .from('contest_results')
+    .select('participant_id, rank, score')
+    .eq('participant_id', participant.participantId);
   const results = (rRows ?? []).map(rowToResult);
 
   const newBadges = computeNewBadges(results, participant);
@@ -44,7 +51,11 @@ export async function evaluateAndAwardBadges(uid: string): Promise<BadgeType[]> 
 }
 
 export async function awardBadge(uid: string, type: BadgeType): Promise<boolean> {
-  const { data: pRow } = await supabase.from('participants').select('*').eq('uid', uid).single();
+  const { data: pRow } = await supabase
+    .from('participants')
+    .select('uid, badges')
+    .eq('uid', uid)
+    .single();
   if (!pRow) return false;
   const participant = rowToParticipant(pRow);
   if ((participant.badges ?? []).some(b => b.type === type)) return false;
@@ -54,7 +65,11 @@ export async function awardBadge(uid: string, type: BadgeType): Promise<boolean>
 }
 
 export async function revokeBadge(uid: string, type: BadgeType): Promise<boolean> {
-  const { data: pRow } = await supabase.from('participants').select('*').eq('uid', uid).single();
+  const { data: pRow } = await supabase
+    .from('participants')
+    .select('uid, badges')
+    .eq('uid', uid)
+    .single();
   if (!pRow) return false;
   const participant = rowToParticipant(pRow);
   const filtered = (participant.badges ?? []).filter(b => b.type !== type);
@@ -64,11 +79,54 @@ export async function revokeBadge(uid: string, type: BadgeType): Promise<boolean
 }
 
 export async function evaluateAllParticipants(): Promise<Record<string, BadgeType[]>> {
-  const { data } = await supabase.from('participants').select('uid').neq('role', 'admin');
-  const summary: Record<string, BadgeType[]> = {};
-  for (const p of data ?? []) {
-    const awarded = await evaluateAndAwardBadges(p.uid);
-    if (awarded.length > 0) summary[p.uid] = awarded;
+  // Batch approach: 2 queries total instead of N×2 sequential queries.
+  //
+  // 1. Fetch all non-admin participants (only fields needed for badge evaluation
+  //    and writing: uid, participant_id, badges, role).
+  // 2. Fetch all contest results (only fields consumed by AUTO_CRITERIA:
+  //    participant_id, rank, score).
+  // 3. Group results by participant_id in memory.
+  // 4. Evaluate each participant and collect those that earn new badges.
+  // 5. Write only the participants that actually earned new badges (minimises writes).
+
+  const [{ data: pRows }, { data: rRows }] = await Promise.all([
+    supabase
+      .from('participants')
+      .select('uid, participant_id, badges, role')
+      .neq('role', 'admin'),
+    supabase
+      .from('contest_results')
+      .select('participant_id, rank, score'),
+  ]);
+
+  // Group results by participant_id for O(1) lookup
+  const resultsByParticipantId = new Map<string, ContestResult[]>();
+  for (const r of rRows ?? []) {
+    const pid = r.participant_id as string;
+    if (!pid) continue;
+    const entry = resultsByParticipantId.get(pid);
+    if (entry) {
+      entry.push(rowToResult(r));
+    } else {
+      resultsByParticipantId.set(pid, [rowToResult(r)]);
+    }
   }
+
+  const summary: Record<string, BadgeType[]> = {};
+  const awardedAt = new Date().toISOString();
+
+  for (const pRow of pRows ?? []) {
+    const participant = rowToParticipant(pRow);
+    const results = resultsByParticipantId.get(participant.participantId) ?? [];
+    const newBadges = computeNewBadges(results, participant);
+    if (newBadges.length === 0) continue;
+
+    // Stamp the same timestamp so a bulk run looks consistent
+    const stamped = newBadges.map(b => ({ ...b, awardedAt }));
+    const merged = [...(participant.badges ?? []), ...stamped];
+    await supabase.from('participants').update({ badges: merged }).eq('uid', participant.uid);
+    summary[participant.uid] = newBadges.map(b => b.type);
+  }
+
   return summary;
 }

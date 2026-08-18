@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getSetting, setSetting, getParticipants, updateParticipant } from '../../lib/db';
+import { getSetting, setSetting, getParticipants, updateParticipant, invalidateParticipantsCache } from '../../lib/db';
 import { supabase } from '../../lib/supabase';
 import { Settings, Save, Crown, Users, Calendar, AlertTriangle, Sparkles, RotateCcw } from 'lucide-react';
 import { syncFoundingCounter } from '../../lib/foundingMembers';
@@ -32,7 +32,7 @@ export default function FoundingMemberSettings() {
     async function load() {
       const [settingsData, { count: foundingCount }] = await Promise.all([
         getSetting('foundingMembers'),
-        supabase.from('participants').select('*', { count: 'exact', head: true }).eq('founding_member', true),
+        supabase.from('participants').select('founding_member', { count: 'exact', head: true }).eq('founding_member', true),
       ]);
       if (settingsData) {
         setSettings({
@@ -104,7 +104,7 @@ export default function FoundingMemberSettings() {
       // Get current count right before writing
       const { count: currentCount } = await supabase
         .from('participants')
-        .select('*', { count: 'exact', head: true })
+        .select('founding_member', { count: 'exact', head: true })
         .eq('founding_member', true);
 
       const base = currentCount ?? 0;
@@ -131,10 +131,11 @@ export default function FoundingMemberSettings() {
 
       // Keep the counter in sync
       await syncFoundingCounter();
+      invalidateParticipantsCache(); // founding_member fields + badges changed for N participants
 
       const { count: newCount } = await supabase
         .from('participants')
-        .select('*', { count: 'exact', head: true })
+        .select('founding_member', { count: 'exact', head: true })
         .eq('founding_member', true);
       setCount(newCount ?? 0);
       toast.success(`Backfilled ${eligible.length} founding member(s)`);

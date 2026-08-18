@@ -8,7 +8,7 @@ import type { Participant } from '../../types';
 import { downloadFoundingCertificate } from '../../lib/certificateGenerator';
 import { downloadFoundingBadge } from '../../components/ui/FoundingMemberBadge';
 import { assignFoundingMember } from '../../lib/foundingMembers';
-import { getParticipants, getSetting } from '../../lib/db';
+import { getParticipants, getSetting, invalidateParticipantsCache } from '../../lib/db';
 import toast from 'react-hot-toast';
 
 export default function FoundingMembersAdmin() {
@@ -82,6 +82,7 @@ export default function FoundingMembersAdmin() {
     setAssigningId(uid);
     try {
       const result = await assignFoundingMember(uid);
+      invalidateParticipantsCache(); // founding_member fields + badges changed
       toast.success(`${name} is now Founding Member #${result?.rank ?? ''}`);
     } catch (err: any) {
       toast.error(err.message || 'Failed to assign founding member');

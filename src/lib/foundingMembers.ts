@@ -64,7 +64,11 @@ export async function assignFoundingMember(uid: string): Promise<FoundingReserva
   if (settings.maxFoundingMembers <= 0) throw new Error('No founding member slots are configured.');
   if (isAfterCutOff(settings.cutOffDate)) throw new Error('Founding Member cutoff date has passed.');
 
-  const { data: partRow } = await supabase.from('participants').select('*').eq('uid', uid).single();
+  const { data: partRow } = await supabase
+    .from('participants')
+    .select('uid, founding_member, founding_rank, founding_season_id, badges')
+    .eq('uid', uid)
+    .single();
   if (!partRow) throw new Error('Participant not found.');
   if (partRow.founding_member === true) {
     return { rank: partRow.founding_rank, seasonId: partRow.founding_season_id, seasonLabel: settings.seasonLabel || settings.seasonId };

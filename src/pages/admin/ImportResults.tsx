@@ -9,7 +9,7 @@ import {
 import { Upload, FileText, AlertCircle, CheckCircle, Shield } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { extractHandle } from '../../lib/profileVerification';
-import { getContests, getParticipants, insertResult, updateContest, updateParticipant, invalidateContestsCache, invalidateParticipantResultsCache } from '../../lib/db';
+import { getContests, getParticipants, insertResult, updateContest, updateParticipant, invalidateContestsCache, invalidateParticipantResultsCache, invalidateParticipantsCache } from '../../lib/db';
 
 interface ParsedRow {
   rank: number;
@@ -211,6 +211,7 @@ export default function ImportResults() {
       await updateContest(selected, { status: 'Completed', ratingCalculated: true, resultsPublished: true, lockedAt: new Date().toISOString() } as any);
       invalidateContestsCache();
       invalidateParticipantResultsCache(); // clear all cached results — new data for every participant
+      invalidateParticipantsCache();       // ratings, tiers, streaks all changed
       toast.success(`✅ CWCL v1.0 Rating calculations published for ${contest.name}!`);
 
       let badgeCount = 0;

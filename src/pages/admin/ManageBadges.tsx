@@ -4,7 +4,7 @@ import type { Participant, BadgeType } from '../../types';
 import { BADGE_META } from '../../types';
 import { Shield, Play, Zap, Award, X, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getParticipants } from '../../lib/db';
+import { getParticipants, invalidateParticipantsCache } from '../../lib/db';
 
 export default function ManageBadges() {
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -34,6 +34,7 @@ export default function ManageBadges() {
     try {
       const awarded = await evaluateAndAwardBadges(p.uid);
       if (awarded.length > 0) {
+        invalidateParticipantsCache();
         toast.success(`🎖️ Awarded ${awarded.length} badge${awarded.length !== 1 ? 's' : ''} to ${p.fullName}!`);
       } else {
         toast(`No new badges for ${p.fullName}`, { icon: 'ℹ️' });
@@ -55,6 +56,7 @@ export default function ManageBadges() {
       const totalAwarded = Object.values(summary).flat().length;
       const affectedCount = Object.keys(summary).length;
       if (totalAwarded > 0) {
+        invalidateParticipantsCache();
         toast.success(`✅ Awarded ${totalAwarded} badge${totalAwarded !== 1 ? 's' : ''} to ${affectedCount} participant${affectedCount !== 1 ? 's' : ''}!`, { duration: 5000 });
       } else {
         toast('All participants are up to date!', { icon: '✨' });
@@ -70,6 +72,7 @@ export default function ManageBadges() {
     try {
       const added = await awardBadge(p.uid, type);
       if (added) {
+        invalidateParticipantsCache();
         toast.success(`🎖️ Awarded "${BADGE_META[type].label}" to ${p.fullName}!`);
       } else {
         toast(`${p.fullName} already has this badge`, { icon: 'ℹ️' });
@@ -84,6 +87,7 @@ export default function ManageBadges() {
     try {
       const removed = await revokeBadge(p.uid, type);
       if (removed) {
+        invalidateParticipantsCache();
         toast.success(`Revoked "${BADGE_META[type].label}" from ${p.fullName}`);
       } else {
         toast(`${p.fullName} doesn't have this badge`, { icon: 'ℹ️' });
