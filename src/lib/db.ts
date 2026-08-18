@@ -150,13 +150,47 @@ export async function getParticipants(limit = 0): Promise<Participant[]> {
   return (data ?? []).map(rowToParticipant);
 }
 
+// ── Module-level cache for getBasicParticipants ───────────────────────────────
+// Shared across ALL callers in the same JS module instance.
+// _basicParticipantsPromise deduplicates concurrent calls that arrive before
+// the first request completes — they all await the same Promise.
+let _basicParticipantsCache:     Participant[] | null = null;
+let _basicParticipantsCacheTime: number              = 0;
+let _basicParticipantsPromise:   Promise<Participant[]> | null = null;
+
 export async function getBasicParticipants(): Promise<Participant[]> {
-  const columns = 'uid, participant_id, full_name, email, college, branch, year, rating, tier, role, badges, attendance, monthly_points, founding_member, contests_participated';
-  const { data, error } = await supabase.from('participants').select(columns)
-    .order('monthly_points', { ascending: false })
-    .order('rating', { ascending: false });
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(rowToParticipant);
+  const now = Date.now();
+
+  // ── 1. Serve from cache if still fresh (60s) ──────────────────────────────
+  if (_basicParticipantsCache && now - _basicParticipantsCacheTime < 60_000) {
+    return _basicParticipantsCache;
+  }
+
+  // ── 2. Deduplicate concurrent calls — share the in-flight promise ─────────
+  if (_basicParticipantsPromise) {
+    return _basicParticipantsPromise;
+  }
+
+  // ── 3. Start the actual network request ───────────────────────────────────
+  _basicParticipantsPromise = (async () => {
+    const columns = 'uid, participant_id, full_name, email, college, branch, year, rating, tier, role, badges, attendance, monthly_points, founding_member, contests_participated';
+    const { data, error } = await supabase.from('participants').select(columns)
+      .order('monthly_points', { ascending: false })
+      .order('rating',         { ascending: false });
+    if (error) throw new Error(error.message);
+    const result = (data ?? []).map(rowToParticipant);
+    // Store in cache
+    _basicParticipantsCache     = result;
+    _basicParticipantsCacheTime = Date.now();
+    return result;
+  })();
+
+  try {
+    return await _basicParticipantsPromise;
+  } finally {
+    // Clear in-flight promise so the next call after cache expiry starts fresh
+    _basicParticipantsPromise = null;
+  }
 }
 
 export async function getParticipantsLatestFirst(limit = 10000): Promise<Participant[]> {
