@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Search, Crown, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { Participant } from '../../types';
 import { TIER_CONFIG } from '../../lib/ratingEngine';
-import { getParticipants, getAllResults } from '../../lib/db';
+import { getBasicParticipants, getContestCounts } from '../../lib/db';
 
 const PAGE_SIZE = 30;
 
@@ -14,18 +14,12 @@ export default function Leaderboard() {
   const [page, setPage]                 = useState(1);
 
   useEffect(() => {
-    getParticipants(0).then(list => {
+    getBasicParticipants().then(list => {
       setParticipants(list.filter(p => p.role !== 'admin' && p.role !== 'super_admin'));
       setLoading(false);
     }).catch(() => setLoading(false));
-    getAllResults().then(results => {
-      const map: Record<string, Set<string>> = {};
-      results.forEach(r => {
-        if (!r.participantId || !r.contestId) return;
-        map[r.participantId] ??= new Set();
-        map[r.participantId].add(r.contestId);
-      });
-      setContestCounts(Object.fromEntries(Object.entries(map).map(([id, s]) => [id, s.size])));
+    getContestCounts().then(map => {
+      setContestCounts(map);
     }).catch(() => {});
   }, []);
 

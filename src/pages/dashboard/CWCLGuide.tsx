@@ -8,7 +8,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import CBBLogo from '../../components/ui/CBBLogo';
 import { TIER_CONFIG } from '../../lib/ratingEngine';
 import { TIER_THRESHOLDS } from '../../types';
-import { getParticipants, getResultsByParticipant } from '../../lib/db';
+import { getBasicParticipants, getResultsByParticipant } from '../../lib/db';
 
 // ─── FAQ Items ──────────────────────────────────────────────────────────────
 const GUIDE_FAQS = [
@@ -51,7 +51,7 @@ export default function CWCLGuide() {
 
   useEffect(() => {
     if (!participant) return;
-    getParticipants(0).then(all => {
+    getBasicParticipants().then(all => {
       const nonAdmin = all.filter(p => p.role !== 'admin' && p.role !== 'super_admin');
       const idx = nonAdmin.findIndex(p => p.uid === participant.uid);
       setOverallRank(idx !== -1 ? idx + 1 : null);

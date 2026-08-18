@@ -41,6 +41,12 @@ export default function LoginNotifications() {
     if (checked) return;
     const p = participant;
 
+    const SESSION_CHECKED_KEY = `cwcl_notif_checked_session_${p.uid}`;
+    if (sessionStorage.getItem(SESSION_CHECKED_KEY)) {
+      setChecked(true);
+      return;
+    }
+
     // Use localStorage so the timestamp persists across browser sessions.
     // Fall back to 24 hours ago on first visit — avoids flooding with old items.
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -148,6 +154,7 @@ export default function LoginNotifications() {
         setItems(notifications);
         setOpen(true);
       }
+      sessionStorage.setItem(SESSION_CHECKED_KEY, 'true');
       setChecked(true);
     }
 

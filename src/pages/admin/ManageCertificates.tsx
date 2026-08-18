@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { renderCertificate, downloadCertificate, type CertificateData } from '../../lib/certificateGenerator';
-import { getCertificates, getParticipants, upsertCertificate, deleteCertificate, getContests, getResultsByContest } from '../../lib/db';
+import { getCertificates, getBasicParticipants, upsertCertificate, deleteCertificate, getContests, getResultsByContest } from '../../lib/db';
 
 const CERT_TYPES: CertificateType[] = [
   'Participation',
@@ -65,7 +65,7 @@ export default function ManageCertificates() {
 
   useEffect(() => {
     getCertificates().then(list => { setCerts(list); setLoading(false); }).catch(() => setLoading(false));
-    getParticipants(0).then(list => setParticipants(list)).catch(() => {});
+    getBasicParticipants().then(list => setParticipants(list)).catch(() => {});
     getContests().then(list => setContests(list.filter(c => c.status === 'Completed'))).catch(() => {});
   }, []);
 

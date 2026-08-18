@@ -11,7 +11,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import type { Contest, ContestResult, Announcement } from '../../types';
 import { BADGE_META } from '../../types';
 import toast from 'react-hot-toast';
-import { getContests, getParticipants, getAnnouncements, getSetting, getResultsByParticipant } from '../../lib/db';
+import { getContests, getBasicParticipants, getAnnouncements, getSetting, getResultsByParticipant } from '../../lib/db';
 import { supabase } from '../../lib/supabase';
 import { getTopicByWeek, PRACTICE_LINKS } from '../../lib/weekTopics';
 
@@ -135,7 +135,7 @@ export default function Dashboard() {
     }).catch(() => setLoadingContest(false));
 
     // Leaderboard - only top 10 for overview
-    getParticipants(0).then(all => {
+    getBasicParticipants().then(all => {
       const filtered = all.filter(r => r.role !== 'admin' && r.role !== 'super_admin') as LeaderRow[];
       setLeaderboard(filtered.slice(0, 10));
       setAllRanked(filtered);

@@ -6,7 +6,11 @@ import {
 } from 'lucide-react';
 import type { Contest, Announcement, Participant } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
-import { getParticipants, getContests, getAnnouncements, getAllResults, getCertificates } from '../../lib/db';
+import {
+  getContests, getAnnouncements, getTableCount,
+  getActiveParticipantsCount, getNonAdminParticipantsCount,
+  getAdminStats, getTopParticipants
+} from '../../lib/db';
 import { runMigration } from '../../lib/migrate';
 import toast from 'react-hot-toast';
 
@@ -48,27 +52,27 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     Promise.all([
-      getParticipants(),
+      getNonAdminParticipantsCount(),
       getContests(),
-      getAllResults(),
+      getTableCount('contest_results'),
       getAnnouncements(3),
-      getCertificates(),
-    ]).then(([parts, contests, results, announcements, certs]) => {
-      const nonAdmin = parts.filter(p => p.role !== 'admin');
-      // Active = participants who have competed in at least 1 contest
-      const activeParticipants = nonAdmin.filter(p => (p.contestsParticipated ?? 0) > 0).length;
+      getTableCount('certificates'),
+      getAdminStats(),
+      getActiveParticipantsCount(),
+      getTopParticipants(5)
+    ]).then(([participantsCount, contests, resultsCount, announcements, certificatesCount, stats, activeParticipants, recentParticipants]) => {
       setCounts({
-        participants: nonAdmin.length,
+        participants: participantsCount,
         contests: contests.length,
-        results: results.length,
+        results: resultsCount,
         announcements: announcements.length,
-        badges: nonAdmin.reduce((s, p) => s + (p.badges?.length ?? 0), 0),
-        certificates: certs.length,
-        foundingMembers: nonAdmin.filter(p => p.foundingMember).length,
+        badges: stats.badges,
+        certificates: certificatesCount,
+        foundingMembers: stats.foundingMembers,
         activeParticipants,
       });
       setContests(contests.slice(0, 5));
-      setRecent(nonAdmin.slice(0, 5));
+      setRecent(recentParticipants);
       setAnnouncements(announcements);
     }).catch(() => {});
   }, []);

@@ -150,6 +150,15 @@ export async function getParticipants(limit = 0): Promise<Participant[]> {
   return (data ?? []).map(rowToParticipant);
 }
 
+export async function getBasicParticipants(): Promise<Participant[]> {
+  const columns = 'uid, participant_id, full_name, email, college, branch, year, rating, tier, role, badges, attendance, monthly_points, founding_member, contests_participated';
+  const { data, error } = await supabase.from('participants').select(columns)
+    .order('monthly_points', { ascending: false })
+    .order('rating', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(rowToParticipant);
+}
+
 export async function getParticipantsLatestFirst(limit = 10000): Promise<Participant[]> {
   let query = supabase.from('participants').select('*').order('participant_id', { ascending: false });
   if (limit > 0) query = query.limit(limit);
@@ -293,6 +302,18 @@ export async function getAllResults(): Promise<ContestResult[]> {
   return (data ?? []).map(rowToResult);
 }
 
+export async function getContestCounts(): Promise<Record<string, number>> {
+  const { data, error } = await supabase.rpc('get_participant_contest_counts');
+  if (error) return {};
+  const map: Record<string, number> = {};
+  (data ?? []).forEach((r: any) => {
+    if (r.participant_id) {
+      map[r.participant_id.trim()] = Number(r.count);
+    }
+  });
+  return map;
+}
+
 export async function insertResult(r: Omit<ContestResult, 'id'> & { id?: string; importedAt?: string }): Promise<void> {
   const row: any = {
     contest_id: r.contestId, contest_name: (r as any).contestName ?? null,
@@ -425,6 +446,47 @@ export async function upsertSponsor(s: Partial<Sponsor> & { id?: string }): Prom
   };
   if (s.id) row.id = s.id;
   await supabase.from('sponsors').upsert(row, { onConflict: 'id' });
+}
+
+// ── Admin Aggregations ────────────────────────────────────────────────────────
+export async function getTableCount(table: string): Promise<number> {
+  const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true });
+  if (error) return 0;
+  return count ?? 0;
+}
+
+export async function getActiveParticipantsCount(): Promise<number> {
+  const { count, error } = await supabase.from('participants').select('*', { count: 'exact', head: true })
+    .neq('role', 'admin')
+    .gt('contests_participated', 0);
+  if (error) return 0;
+  return count ?? 0;
+}
+
+export async function getNonAdminParticipantsCount(): Promise<number> {
+  const { count, error } = await supabase.from('participants').select('*', { count: 'exact', head: true })
+    .neq('role', 'admin');
+  if (error) return 0;
+  return count ?? 0;
+}
+
+export async function getAdminStats(): Promise<{ badges: number, foundingMembers: number }> {
+  const { data, error } = await supabase.from('participants').select('badges, founding_member').neq('role', 'admin');
+  if (error) return { badges: 0, foundingMembers: 0 };
+  let badges = 0;
+  let foundingMembers = 0;
+  for (const row of (data ?? [])) {
+    if (row.badges) badges += row.badges.length;
+    if (row.founding_member) foundingMembers += 1;
+  }
+  return { badges, foundingMembers };
+}
+
+export async function getTopParticipants(limit = 5): Promise<Participant[]> {
+  const columns = 'uid, participant_id, full_name, college, branch, role';
+  const { data, error } = await supabase.from('participants').select(columns).neq('role', 'admin').order('monthly_points', { ascending: false }).order('rating', { ascending: false }).limit(limit);
+  if (error) return [];
+  return (data ?? []).map(rowToParticipant);
 }
 
 export async function updateSponsor(id: string, updates: Partial<Sponsor>): Promise<void> {
