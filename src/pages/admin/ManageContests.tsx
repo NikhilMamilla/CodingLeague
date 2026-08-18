@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../contexts/AuthContext';
-import { getContests, insertContest, updateContest, insertAnnouncement } from '../../lib/db';
+import { getContests, insertContest, updateContest, insertAnnouncement, invalidateContestsCache } from '../../lib/db';
 
 const EMPTY = {
   name: '', weekNumber: '', mode: 'Online' as ContestMode,
@@ -88,6 +88,7 @@ export default function ManageContests() {
         for (const { id, newStatus } of toUpdate) {
           updateContest(id, { status: newStatus } as any)
             .then(() => {
+              invalidateContestsCache();
               if (newStatus === 'Active') toast.success('Contest is now LIVE — auto-activated!');
               if (newStatus === 'Completed') toast('Contest auto-marked as Completed.', { icon: '🏁' });
             })
@@ -133,6 +134,7 @@ export default function ManageContests() {
         status: 'Upcoming' as ContestStatus, seasonId: 'cwcl-2026-27',
         difficulty: form.difficulty, createdAt: new Date().toISOString(),
       } as any);
+      invalidateContestsCache();
       const refreshed = await getContests();
       setContests(refreshed);
       toast.success('Contest created successfully!');
@@ -159,6 +161,7 @@ export default function ManageContests() {
         problemSetter: editingContest.problemSetter || undefined,
         instructions: editingContest.instructions || undefined,
       } as any);
+      invalidateContestsCache();
       setContests(prev => prev.map(c => c.id === editingContest.id ? { ...c, ...editingContest } : c));
       toast.success('Contest updated successfully!');
       setEditingContest(null);
@@ -173,6 +176,7 @@ export default function ManageContests() {
     if (!linkModalContest) return;
     try {
       await updateContest(linkModalContest.id, { contestLink: inputLink.trim() || null } as any);
+      invalidateContestsCache();
       setContests(prev => prev.map(c => c.id === linkModalContest.id ? { ...c, contestLink: inputLink.trim() || undefined } : c));
       toast.success('Contest link saved!');
       setLinkModalContest(null);
@@ -183,6 +187,7 @@ export default function ManageContests() {
     if (!confirm('Delete this contest? Cannot be undone.')) return;
     try {
       await import('../../lib/db').then(m => m.deleteContest(id));
+      invalidateContestsCache();
       setContests(prev => prev.filter(c => c.id !== id));
       toast.success('Contest deleted');
     } catch (e: any) { toast.error(e.message); }
@@ -203,6 +208,7 @@ export default function ManageContests() {
         }
       }
       await updateContest(c.id, updates);
+      invalidateContestsCache();
       setContests(prev => prev.map(x => x.id === c.id ? { ...x, ...updates } : x));
       toast.success(`Contest marked as ${newStatus}`);
     } catch (e: any) { toast.error(e.message); }
@@ -227,6 +233,7 @@ export default function ManageContests() {
         endTime: newEndTime,
         contestLink: activateLink.trim() || null
       } as any);
+      invalidateContestsCache();
 
       setContests(prev => prev.map(c => c.id === activatingContest.id ? {
         ...c,

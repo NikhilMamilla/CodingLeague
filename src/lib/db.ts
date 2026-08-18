@@ -265,10 +265,38 @@ export async function updateParticipant(uid: string, updates: Record<string, any
 
 // ── Contests ──────────────────────────────────────────────────────────────────
 
+let _contestsCache:     Contest[] | null = null;
+let _contestsCacheTime: number          = 0;
+let _contestsPromise:   Promise<Contest[]> | null = null;
+
 export async function getContests(): Promise<Contest[]> {
-  const { data, error } = await supabase.from('contests').select('*').order('date', { ascending: true });
-  if (error) throw new Error(error.message);
-  return (data ?? []).map(rowToContest);
+  const now = Date.now();
+  if (_contestsCache && now - _contestsCacheTime < 60_000) return _contestsCache;
+  if (_contestsPromise) return _contestsPromise;
+
+  _contestsPromise = (async () => {
+    const { data, error } = await supabase
+      .from('contests')
+      .select('id, contest_number, name, week_number, mode, date, start_time, end_time, duration, platform, contest_link, venue, problem_setter, instructions, status, season_id, difficulty, rating_calculated, results_published, locked_at, created_at')
+      .order('date', { ascending: true });
+    if (error) throw new Error(error.message);
+    const result = (data ?? []).map(rowToContest);
+    _contestsCache     = result;
+    _contestsCacheTime = Date.now();
+    return result;
+  })();
+
+  try {
+    return await _contestsPromise;
+  } finally {
+    _contestsPromise = null;
+  }
+}
+
+/** Invalidate contests cache (call after insert/update/delete). */
+export function invalidateContestsCache(): void {
+  _contestsCache     = null;
+  _contestsCacheTime = 0;
 }
 
 export async function getContestById(id: string): Promise<Contest | null> {
@@ -321,14 +349,81 @@ export async function deleteContest(id: string): Promise<void> {
 
 // ── Contest Results ───────────────────────────────────────────────────────────
 
+// Cache for getResultsByParticipant — keyed by participantId.
+// 60s TTL; invalidated by invalidateParticipantResultsCache() after imports.
+const _participantResultsCache     = new Map<string, { data: ContestResult[]; time: number }>();
+const _participantResultsPromises  = new Map<string, Promise<ContestResult[]>>();
+
 export async function getResultsByParticipant(participantId: string): Promise<ContestResult[]> {
-  const { data } = await supabase.from('contest_results').select('*').eq('participant_id', participantId).order('imported_at', { ascending: false });
-  return (data ?? []).map(rowToResult);
+  const now    = Date.now();
+  const cached = _participantResultsCache.get(participantId);
+  if (cached && now - cached.time < 60_000) return cached.data;
+
+  const inflight = _participantResultsPromises.get(participantId);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    // Columns consumed by Dashboard, CWCLGuide, MyStats, and LoginNotifications:
+    //   id, contest_id, contest_name — identity / display
+    //   rank, score, league_points   — stats, charts, badge evaluation
+    //   rating_before, rating_after  — rating delta display and charts
+    //   problems_solved              — MyStats charts
+    //   imported_at                  — sort order
+    const cols = 'id, contest_id, contest_name, participant_id, rank, score, penalty, problems_solved, league_points, rating_before, rating_after, rating_change, imported_at';
+    const { data } = await supabase
+      .from('contest_results')
+      .select(cols)
+      .eq('participant_id', participantId)
+      .order('imported_at', { ascending: false });
+    const result = (data ?? []).map(rowToResult);
+    _participantResultsCache.set(participantId, { data: result, time: Date.now() });
+    return result;
+  })();
+
+  _participantResultsPromises.set(participantId, promise);
+  try {
+    return await promise;
+  } finally {
+    _participantResultsPromises.delete(participantId);
+  }
 }
 
+/** Call after inserting new results for a participant so cache doesn't serve stale data. */
+export function invalidateParticipantResultsCache(participantId?: string): void {
+  if (participantId) {
+    _participantResultsCache.delete(participantId);
+  } else {
+    _participantResultsCache.clear();
+  }
+}
+
+const _contestResultsCache     = new Map<string, { data: ContestResult[]; time: number }>();
+const _contestResultsPromises  = new Map<string, Promise<ContestResult[]>>();
+
 export async function getResultsByContest(contestId: string): Promise<ContestResult[]> {
-  const { data } = await supabase.from('contest_results').select('*').eq('contest_id', contestId);
-  return (data ?? []).map(rowToResult);
+  const now    = Date.now();
+  const cached = _contestResultsCache.get(contestId);
+  if (cached && now - cached.time < 120_000) return cached.data; // 2-min cache
+
+  const inflight = _contestResultsPromises.get(contestId);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    const { data } = await supabase
+      .from('contest_results')
+      .select('id, contest_id, contest_name, participant_id, participant_name, college, rank, score, penalty, problems_solved, league_points, rating_before, rating_after, rating_change, imported_at')
+      .eq('contest_id', contestId);
+    const result = (data ?? []).map(rowToResult);
+    _contestResultsCache.set(contestId, { data: result, time: Date.now() });
+    return result;
+  })();
+
+  _contestResultsPromises.set(contestId, promise);
+  try {
+    return await promise;
+  } finally {
+    _contestResultsPromises.delete(contestId);
+  }
 }
 
 export async function getAllResults(): Promise<ContestResult[]> {
@@ -336,16 +431,32 @@ export async function getAllResults(): Promise<ContestResult[]> {
   return (data ?? []).map(rowToResult);
 }
 
+let _contestCountsCache:     Record<string, number> | null = null;
+let _contestCountsCacheTime: number                       = 0;
+let _contestCountsPromise:   Promise<Record<string, number>> | null = null;
+
 export async function getContestCounts(): Promise<Record<string, number>> {
-  const { data, error } = await supabase.rpc('get_participant_contest_counts');
-  if (error) return {};
-  const map: Record<string, number> = {};
-  (data ?? []).forEach((r: any) => {
-    if (r.participant_id) {
-      map[r.participant_id.trim()] = Number(r.count);
-    }
-  });
-  return map;
+  const now = Date.now();
+  if (_contestCountsCache && now - _contestCountsCacheTime < 60_000) return _contestCountsCache;
+  if (_contestCountsPromise) return _contestCountsPromise;
+
+  _contestCountsPromise = (async () => {
+    const { data, error } = await supabase.rpc('get_participant_contest_counts');
+    if (error) return {};
+    const map: Record<string, number> = {};
+    (data ?? []).forEach((r: any) => {
+      if (r.participant_id) map[r.participant_id.trim()] = Number(r.count);
+    });
+    _contestCountsCache     = map;
+    _contestCountsCacheTime = Date.now();
+    return map;
+  })();
+
+  try {
+    return await _contestCountsPromise;
+  } finally {
+    _contestCountsPromise = null;
+  }
 }
 
 export async function insertResult(r: Omit<ContestResult, 'id'> & { id?: string; importedAt?: string }): Promise<void> {
@@ -413,9 +524,36 @@ export async function deleteCertificate(id: string): Promise<void> {
 
 // ── Announcements ─────────────────────────────────────────────────────────────
 
+// Cache keyed by limit so getAnnouncements(4) and getAnnouncements(100)
+// are stored independently but each deduplicated across concurrent callers.
+const _announcementsCache     = new Map<number, { data: (Announcement & { id: string })[]; time: number }>();
+const _announcementsPromises  = new Map<number, Promise<(Announcement & { id: string })[]>>();
+
 export async function getAnnouncements(limit = 20): Promise<(Announcement & { id: string })[]> {
-  const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(limit);
-  return (data ?? []).map(rowToAnnouncement);
+  const now     = Date.now();
+  const cached  = _announcementsCache.get(limit);
+  if (cached && now - cached.time < 60_000) return cached.data;
+
+  const inflight = _announcementsPromises.get(limit);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    const { data } = await supabase
+      .from('announcements')
+      .select('id, title, body, category, created_by, created_at, attachments')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+    const result = (data ?? []).map(rowToAnnouncement);
+    _announcementsCache.set(limit, { data: result, time: Date.now() });
+    return result;
+  })();
+
+  _announcementsPromises.set(limit, promise);
+  try {
+    return await promise;
+  } finally {
+    _announcementsPromises.delete(limit);
+  }
 }
 
 export async function insertAnnouncement(a: Omit<Announcement, 'id'>): Promise<string> {

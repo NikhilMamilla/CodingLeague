@@ -153,7 +153,7 @@ export default function Dashboard() {
     // Founding settings + count
     Promise.all([
       getSetting('foundingMembers'),
-      supabase.from('participants').select('*', { count: 'exact', head: true }).eq('founding_member', true),
+      supabase.from('participants').select('founding_member', { count: 'exact', head: true }).eq('founding_member', true),
     ]).then(([settings, { count }]) => {
       setFoundingSlots(prev => ({
         enabled: settings?.enabled === true,

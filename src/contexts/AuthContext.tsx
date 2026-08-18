@@ -36,13 +36,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setRole(p.role);
       } catch { /* ignore bad cache */ }
     }
-    // Always fetch fresh from Supabase — retry up to 3x for new registrations
-    // where the row may not be written yet
+    // Fetch fresh from Supabase — retry up to 3x for new registrations.
+    // Explicit column list — excludes heavy/unused fields:
+    //   ratingHistory (JSON array, largest field), peakTitle, emailVerified,
+    //   lastContestDate, createdAt, and *Url variants (only needed on Profile
+    //   page which issues its own independent full fetch).
+    const COLUMNS = [
+      'uid', 'participant_id', 'full_name', 'email', 'phone',
+      'photo_url', 'bio', 'github', 'linkedin', 'role',
+      'college', 'university', 'branch', 'year', 'city', 'state',
+      'rating', 'peak_rating', 'tier', 'streak', 'monthly_points',
+      'contests_participated', 'attendance', 'badges',
+      'founding_member', 'founding_rank', 'founding_awarded_at', 'founding_season_id',
+      'hackerrank_username', 'codechef_username', 'leetcode_username',
+      'codeforces_handle', 'gfg_username',
+    ].join(', ');
+
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise(r => setTimeout(r, 800 * attempt));
       const { data, error } = await supabase
         .from('participants')
-        .select('*')
+        .select(COLUMNS)
         .eq('uid', uid)
         .maybeSingle();
       if (error) { setParticipant(null); setRole(null); return; }
