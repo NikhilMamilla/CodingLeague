@@ -256,8 +256,7 @@ export async function getBasicParticipants(): Promise<Participant[]> {
 }
 
 export async function getParticipantsLatestFirst(limit = 10000): Promise<Participant[]> {
-  const cols = 'uid, participant_id, full_name, email, college, branch, year, tier, rating, contests_participated, badges, role';
-  let query = supabase.from('participants').select(cols).order('participant_id', { ascending: false });
+  let query = supabase.from('participants').select('*').order('participant_id', { ascending: false });
   if (limit > 0) query = query.limit(limit);
   const { data, error } = await query;
   if (error) throw new Error(error.message);
