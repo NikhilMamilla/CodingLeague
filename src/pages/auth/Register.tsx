@@ -6,10 +6,10 @@ import { auth } from '../../lib/firebase';
 import { getTierFromRating } from '../../types';
 import CBBLogo from '../../components/ui/CBBLogo';
 import FoundingMemberBadge from '../../components/ui/FoundingMemberBadge';
-import { reserveFoundingRank, type FoundingReservation } from '../../lib/foundingMembers';
+import type { FoundingReservation } from '../../lib/foundingMembers';
 import toast from 'react-hot-toast';
 import { extractHandle, verifyPlatformProfile, type VerificationResult } from '../../lib/profileVerification';
-import { upsertParticipant, getSetting, insertAnnouncement } from '../../lib/db';
+import { upsertParticipant, getSetting } from '../../lib/db';
 import { supabase } from '../../lib/supabase';
 
 type Step = 1 | 2 | 3;
@@ -82,23 +82,28 @@ const PLATFORMS = [
 ] as const;
 
 async function generateParticipantId(): Promise<string> {
-  // Read counter and actual max from DB simultaneously
-  const [counterVal, maxRow] = await Promise.all([
-    supabase.from('counters').select('value').eq('id', 'participant_id').maybeSingle(),
-    supabase.from('participants').select('participant_id').order('participant_id', { ascending: false }).limit(1).maybeSingle(),
-  ]);
-
-  // Derive actual max number from the highest existing ID
-  const existingMax = maxRow.data?.participant_id
-    ? parseInt((maxRow.data.participant_id as string).replace(/\D/g, ''), 10)
+  // Read the actual max from participants — still a plain SELECT, still
+  // allowed for everyone. The write is the part that changed: counters can
+  // only be written by admins now (see supabase/migrations/0002), so the
+  // increment goes through next_counter(), a SECURITY DEFINER RPC that takes
+  // this value as a floor and does the read-check-write atomically server
+  // side. That also closes a pre-existing race: two signups landing on the
+  // same ID was possible with the old read-then-write-from-the-browser code.
+  const { data: maxRow } = await supabase
+    .from('participants')
+    .select('participant_id')
+    .order('participant_id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const existingMax = maxRow?.participant_id
+    ? parseInt((maxRow.participant_id as string).replace(/\D/g, ''), 10)
     : 0;
 
-  // Use whichever is higher — counter or actual max — to prevent gaps or duplicates
-  const counterCurrent = counterVal.data?.value ?? 0;
-  const next = Math.max(counterCurrent, existingMax) + 1;
-
-  // Write the new value back to counter
-  await supabase.from('counters').upsert({ id: 'participant_id', value: next }, { onConflict: 'id' });
+  const { data: next, error } = await supabase.rpc('next_counter', {
+    counter_id: 'participant_id',
+    min_floor: existingMax,
+  });
+  if (error) throw new Error(error.message);
 
   return 'CBB' + String(next).padStart(6, '0');
 }
@@ -220,7 +225,6 @@ export default function Register() {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
       await updateProfile(cred.user, { displayName: form.fullName });
       const participantId = await generateParticipantId();
-      const foundingReservation = await reserveFoundingRank();
 
       // Extract clean handles for sync
       const hrHandle = extractHandle('hackerrankUsername', form.hackerrankUsername);
@@ -255,26 +259,28 @@ export default function Register() {
         role: 'participant',
         contestsParticipated: 0, attendance: 0,
         createdAt: new Date().toISOString(), emailVerified: false,
+        foundingMember: false, badges: [],
       };
 
-      if (foundingReservation) {
-        const awardedAt = new Date().toISOString();
-        participantDoc.foundingMember = true;
-        participantDoc.foundingRank = foundingReservation.rank;
-        participantDoc.foundingAwardedAt = awardedAt;
-        participantDoc.foundingSeasonId = foundingReservation.seasonId;
-        participantDoc.badges = [{
-          type: 'founding_member',
-          label: 'Founding Member',
-          emoji: '🏅',
-          awardedAt,
-        }];
-      } else {
-        participantDoc.foundingMember = false;
-        participantDoc.badges = [];
-      }
-
+      // participants_guard (supabase/migrations/0002) forces role, rating,
+      // badges, and the founding_* columns to these same defaults on INSERT
+      // regardless of what's sent — a fresh signup cannot hand itself
+      // privileges or a founding-member slot. Founding-member status, if any,
+      // is claimed below via an RPC once the row exists.
       await upsertParticipant({ uid: cred.user.uid, ...participantDoc });
+
+      // Must run after the insert above — claim_founding_member() (supabase/
+      // migrations/0003) stamps an *existing* participants row; it can't
+      // reserve a slot for a row that isn't there yet. Returns null when the
+      // program is off, past its cutoff, or full.
+      let foundingReservation: FoundingReservation | null = null;
+      try {
+        const { data } = await supabase.rpc('claim_founding_member');
+        if (data) {
+          foundingReservation = { rank: data.rank, seasonId: data.seasonId, seasonLabel: data.seasonLabel };
+        }
+      } catch { /* founding member program unavailable — proceed without it */ }
+
       toast.success(`Welcome ${form.fullName}! Your ID: ${participantId}`);
       // Small delay to allow AuthContext to refetch the new participant row
       await new Promise(r => setTimeout(r, 500));
@@ -282,13 +288,7 @@ export default function Register() {
       // Create notification announcement for founding members
       if (foundingReservation) {
         try {
-          await insertAnnouncement({
-            title: 'Founding Member Awarded',
-            body: `Congratulations! You are among the first registered participants of CWCL and have received Founding Member recognition for season ${foundingReservation.seasonId}.`,
-            category: 'Results',
-            createdBy: 'System',
-            createdAt: new Date().toISOString(),
-          });
+          await supabase.rpc('announce_founding_member', { p_season_id: foundingReservation.seasonId });
         } catch { /* ignore */ }
         setFoundingData(foundingReservation);
         setShowFoundingModal(true);
