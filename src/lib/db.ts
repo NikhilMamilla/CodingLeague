@@ -235,7 +235,10 @@ export async function getBasicParticipants(): Promise<Participant[]> {
 
   // ── 3. Start the actual network request ───────────────────────────────────
   _basicParticipantsPromise = (async () => {
-    const columns = 'uid, participant_id, full_name, email, college, branch, year, rating, tier, role, badges, attendance, monthly_points, founding_member, contests_participated';
+    // No email/phone — this powers the public Leaderboard, reachable while
+    // logged out, and those columns are not granted to the `anon` role
+    // (supabase/migrations/0002_rls_firebase_identity.sql).
+    const columns = 'uid, participant_id, full_name, college, branch, year, rating, tier, role, badges, attendance, monthly_points, founding_member, contests_participated';
     const { data, error } = await supabase.from('participants').select(columns)
       .order('monthly_points', { ascending: false })
       .order('rating',         { ascending: false });
