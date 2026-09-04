@@ -27,15 +27,16 @@ export default function HallOfFame() {
           <p className="text-text-secondary text-sm">CWCL Season 2026–27 · Annual Champions</p>
         </div>
 
-        {/* Season not started */}
+        {/* Season in progress */}
         <div className="card border-gold/20 text-center py-12 px-8 mb-8" style={{ boxShadow: '0 0 30px rgba(244,196,48,0.06)' }}>
           <div className="w-16 h-16 rounded-full bg-gold/10 border border-gold/30 flex items-center justify-center mx-auto mb-5">
             <Star size={28} className="text-gold" />
           </div>
           <h2 className="heading-sm mb-3">Building Legends</h2>
           <p className="text-text-secondary text-sm leading-relaxed max-w-lg mx-auto mb-6">
-            The Hall of Fame is empty because Season 2026–27 hasn't started yet.
-            After the season ends in August 2027, the greatest performers will be permanently
+            Season 2026–27 is underway — check the <Link to="/winners" className="text-gold hover:underline">Monthly Winners</Link> page
+            for results so far. The Hall of Fame itself stays empty until the season concludes in August 2027,
+            when the greatest performers across the full season will be permanently
             immortalized here — just like ICPC, Codeforces, and LeetCode honour their champions.
           </p>
           <div className="flex items-center justify-center gap-2 text-text-secondary/60 text-xs font-body mb-6">
@@ -81,7 +82,7 @@ export default function HallOfFame() {
             Code Every Saturday. Rise Every Month.
           </p>
           <p className="text-text-secondary text-xs mt-2">
-            Your name could be here. Season starts August 1, 2026.
+            Your name could be here. Season is live — join before the next contest.
           </p>
           <div className="flex items-center justify-center gap-3 mt-4">
             <Link to="/register" className="btn-primary text-xs px-5 py-2">Register Free</Link>
