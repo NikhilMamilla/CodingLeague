@@ -22,15 +22,29 @@ a client-side React redirect — it hides UI, it doesn't stop API calls).
 **How the identity bridge works**: Supabase has native support for trusting
 another auth provider's tokens directly — called "Third-Party Auth." Once
 Firebase is registered there (Step 1 below), Supabase verifies a Firebase ID
-token against Firebase's own public keys and treats the request as
-`authenticated`. `src/lib/supabase.ts` just forwards the current Firebase ID
-token on every request (`accessToken` option) — no signing secret of ours
-involved, no Firebase Cloud Function, no paid plan. Two earlier approaches
-were considered and dropped:
-- A Firebase *blocking function* to stamp a custom claim — dropped because
-  Firebase Cloud Functions require the paid Blaze plan just to deploy, even
-  at zero usage cost, and turned out to be unnecessary — Third-Party Auth
-  grants `authenticated` on its own, without needing a custom claim.
+token against Firebase's own public keys — confirmed working live via
+`debug_whoami()` (see `0004_debug_whoami.sql`), `auth.jwt()->>'sub'` resolves
+correctly. But PostgREST picks the Postgres role for a request from the
+JWT's `role` claim, and Firebase ID tokens don't carry one — also confirmed
+live, `auth.jwt()->>'role'` came back as the literal string `"anon"` on every
+request regardless of who was logged in, which is PostgREST's fallback for a
+missing role claim.
+
+The fix is a Firebase **custom claim**: once a user's Firebase account has
+`role: "authenticated"` set via the Admin SDK, every ID token issued to them
+afterward carries it at the top level, and PostgREST reads it correctly.
+`api/ensure-role-claim.js` sets that claim — a free Vercel function, not a
+Firebase Cloud Function, so no Blaze plan needed (setting a custom claim is a
+plain Admin SDK/API call; only *deploying code to run inside Firebase* needs
+Blaze). `src/lib/supabase.ts` calls it once per login, then force-refreshes
+the Firebase token so it picks up the new claim before talking to Supabase.
+
+Two earlier approaches were tried and dropped before this one:
+- A Firebase *blocking function* to stamp the same claim automatically on
+  every sign-in — dropped because Firebase Cloud Functions (blocking
+  functions included) require the paid Blaze plan just to deploy, even at
+  zero usage cost. The claim itself is exactly what's needed, as it turned
+  out; only that specific delivery mechanism was the problem.
 - A Vercel function that verified the Firebase token and self-signed a
   Supabase-compatible JWT — dropped because it depended on Supabase's legacy
   HS256 JWT secret, which this project has already rotated away from in
@@ -82,38 +96,64 @@ supposed to until `0002`/`0003` are applied. The steps below finish that.
 
 ## Steps
 
-### Step 1 — Enable Firebase as a Supabase Third-Party Auth provider
+### Already done
 
-Supabase Dashboard → your project → Authentication → Sign In / Providers →
-**Third-Party Auth** → Add provider → **Firebase** → enter project ID:
-```
-codingleague-e7dd9
-```
-→ Save. That's the entire step — no keys, no secrets, nothing to protect.
+- Step "Enable Firebase as a Supabase Third-Party Auth provider" — done,
+  confirmed working (`debug_whoami()` shows `jwt_sub` and `jwt_aud`
+  resolving correctly).
+- `0001`, `0002`, `0003` — applied.
+- `0004_debug_whoami.sql` — applied (temporary, drop it once everything below
+  is confirmed working: `drop function public.debug_whoami();`).
 
-### Step 2 — Redeploy the frontend
+### Step 1 — Get a new Firebase service account key
 
-Vercel Dashboard → your project → Deployments → confirm the latest commit on
-`main` is deployed (it should auto-deploy from the push; redeploy manually if
-not). This ships the `accessToken` bridge in `src/lib/supabase.ts`.
+Firebase Console → your project (`codingleague-e7dd9`) → ⚙️ Project
+Settings → **Service Accounts** tab → **Generate new private key** → this
+downloads a JSON file.
 
-### Step 3 — Apply `0002` and `0003`
+If you generated one for this earlier and pasted its contents anywhere
+outside a secrets manager (chat, a doc, etc.), delete that key from this same
+page first (find it by its key ID, click the trash icon) and generate a
+fresh one — treat any key that's been pasted in plaintext anywhere as
+burned, even if you're fairly sure it hasn't been misused.
 
-Supabase SQL Editor, in order:
-[`0002_rls_firebase_identity.sql`](migrations/0002_rls_firebase_identity.sql),
-then
-[`0003_registration_rpcs.sql`](migrations/0003_registration_rpcs.sql).
+**Do not commit this file. Do not paste its contents into chat.** Copy the
+three fields below directly from the file into Vercel in the next step, then
+delete the download.
 
-This restores every write path — registration, profile edits, admin panels,
-CSV imports — now scoped to the signed-in user's own row (or to admins), and
-closes the `sensitive_columns_exposed` finding for logged-out visitors.
+### Step 2 — Add 3 environment variables in Vercel
+
+Vercel Dashboard → your project → Settings → **Environment Variables** → add
+each of these (Production + Preview):
+
+| Name | Value |
+|---|---|
+| `FIREBASE_PROJECT_ID` | `project_id` from the service account JSON (`codingleague-e7dd9`) |
+| `FIREBASE_CLIENT_EMAIL` | `client_email` from the service account JSON |
+| `FIREBASE_PRIVATE_KEY` | `private_key` from the service account JSON — paste it exactly as it appears, `\n` sequences and all |
+
+None of these get a `VITE_` prefix — that prefix is what makes Vite ship a
+variable to the browser, and these three must never reach the browser.
+
+### Step 3 — Redeploy
+
+Vercel Dashboard → Deployments → redeploy the latest commit on `main` (env
+var changes need a fresh deploy to take effect).
 
 ## Verifying
 
-**Confirm `0002`/`0003` actually applied** — Supabase Dashboard → Database →
-Functions. You should see `is_admin`, `fb_uid`, `next_counter`,
-`claim_founding_member`, `announce_founding_member`, `participants_guard`
-listed. If they're missing, the SQL Editor run didn't go through.
+**Confirm the role claim is working** — log out fully, log back in, browser
+console:
+
+```js
+JSON.stringify((await __supabase.rpc('debug_whoami')).data)
+```
+
+`postgres_role` should now say `"authenticated"` (it was showing `"anon"`
+before Steps 1–3 above). If it still says `"anon"` after a full logout/login,
+the Vercel env vars from Step 2 likely didn't get picked up — check the
+`api/ensure-role-claim` function's logs in Vercel Dashboard → Deployments →
+(latest) → Functions for the actual error.
 
 **Confirm RLS from a browser console, logged out**:
 
@@ -137,12 +177,11 @@ correctly.
 Finally: Supabase Dashboard → Advisors → Security — both findings should
 clear (may take a few minutes to re-scan).
 
-### If writes still fail with an RLS error after Step 1–3
+### If `postgres_role` still isn't `"authenticated"` after all 3 steps
 
-That would mean Third-Party Auth isn't granting the `authenticated` role the
-way expected — tell me and we'll add a diagnostic RPC to see exactly what
-`auth.jwt()` looks like server-side for a real logged-in request, rather than
-guessing further.
+Send the exact output of the `debug_whoami()` call above — with real data
+instead of guessing further, this has been fast to pin down every time so
+far.
 
 ## Known remaining gap — not closed by this PR
 
