@@ -33,19 +33,42 @@
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
-    }),
-  });
+// Deliberately not run at module load time: a bad/missing env var throwing
+// here (rather than inside the handler's try/catch below) crashes the whole
+// function before it can return a JSON body, so the client just sees a bare
+// 500 with no way to tell what's actually wrong.
+function ensureFirebaseAdmin() {
+  if (getApps().length) return;
+
+  const projectId   = process.env.FIREBASE_PROJECT_ID;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey  = (process.env.FIREBASE_PRIVATE_KEY || '').replace(/\\n/g, '\n');
+
+  const missing = [
+    !projectId   && 'FIREBASE_PROJECT_ID',
+    !clientEmail && 'FIREBASE_CLIENT_EMAIL',
+    !privateKey  && 'FIREBASE_PRIVATE_KEY',
+  ].filter(Boolean);
+  if (missing.length) {
+    throw new Error(`Missing Vercel env var(s): ${missing.join(', ')}`);
+  }
+  if (!privateKey.includes('BEGIN PRIVATE KEY')) {
+    throw new Error('FIREBASE_PRIVATE_KEY does not look like a PEM key — check it was pasted in full, including the BEGIN/END lines');
+  }
+
+  initializeApp({ credential: cert({ projectId, clientEmail, privateKey }) });
 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  try {
+    ensureFirebaseAdmin();
+  } catch (err) {
+    res.status(500).json({ error: 'Server misconfigured', detail: String(err?.message ?? err) });
     return;
   }
 
@@ -58,8 +81,8 @@ export default async function handler(req, res) {
   let decoded;
   try {
     decoded = await getAuth().verifyIdToken(idToken);
-  } catch {
-    res.status(401).json({ error: 'Invalid or expired Firebase ID token' });
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid or expired Firebase ID token', detail: String(err?.message ?? err) });
     return;
   }
 

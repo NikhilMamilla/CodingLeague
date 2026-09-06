@@ -36,15 +36,22 @@ async function getAuthenticatedToken(): Promise<string | null> {
       if (result.claims.role === 'authenticated') return;
 
       try {
-        await fetch('/api/ensure-role-claim', {
+        const res = await fetch('/api/ensure-role-claim', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ idToken: result.token }),
         });
-      } catch {
-        // Network hiccup — fall through. Worst case this request still goes
-        // out as `anon`, which RLS handles safely (it just denies), not a
-        // security risk either way.
+        if (!res.ok) {
+          // fetch only rejects on a network failure, not on a non-2xx
+          // status — log the body so a 500 shows up somewhere visible
+          // instead of silently doing nothing.
+          console.error('ensure-role-claim failed:', res.status, await res.text());
+        }
+      } catch (err) {
+        // Actual network failure — fall through. Worst case this request
+        // still goes out as `anon`, which RLS handles safely (it just
+        // denies), not a security risk either way.
+        console.error('ensure-role-claim network error:', err);
       }
 
       await user.getIdToken(true); // force-refresh to pick up the new claim
