@@ -4,8 +4,8 @@ Fixes the two Supabase advisor findings on project `niuskdszahvvumwzknow`:
 `rls_disabled_in_public` and `sensitive_columns_exposed`.
 
 All the code and SQL this runbook needs is already written and committed.
-What's left is a handful of dashboard actions that need your credentials —
-nobody else can do these for you. Follow the steps **in order**.
+What's left is two dashboard actions that need your credentials — nobody
+else can do these for you. Follow the steps **in order**.
 
 ## Why this wasn't a one-line fix
 
@@ -19,17 +19,25 @@ visitor: anyone could read, edit, or delete any row via the REST API,
 regardless of the admin gate in `src/components/auth/AdminRoute.tsx` (that's
 a client-side React redirect — it hides UI, it doesn't stop API calls).
 
-**How the identity bridge works**: `api/session.js` — a free Vercel
-serverless function — verifies a Firebase ID token server-side and mints a
-short-lived Supabase-compatible JWT (`sub` = Firebase UID, `role` =
-`authenticated`), signed with Supabase's own JWT secret. `src/lib/supabase.ts`
-fetches one of these before every request. This does the same job as
-Supabase's built-in "Third-Party Auth" feature, without needing it — and
-without any Firebase Cloud Function, which (even a function that costs
-nothing to run) requires enabling Firebase's paid Blaze plan just to deploy.
-Everything here runs on tiers you already have for free: Vercel's Hobby plan
-and Firebase Admin SDK token verification (a plain API call, not a Cloud
-Function).
+**How the identity bridge works**: Supabase has native support for trusting
+another auth provider's tokens directly — called "Third-Party Auth." Once
+Firebase is registered there (Step 1 below), Supabase verifies a Firebase ID
+token against Firebase's own public keys and treats the request as
+`authenticated`. `src/lib/supabase.ts` just forwards the current Firebase ID
+token on every request (`accessToken` option) — no signing secret of ours
+involved, no Firebase Cloud Function, no paid plan. Two earlier approaches
+were considered and dropped:
+- A Firebase *blocking function* to stamp a custom claim — dropped because
+  Firebase Cloud Functions require the paid Blaze plan just to deploy, even
+  at zero usage cost, and turned out to be unnecessary — Third-Party Auth
+  grants `authenticated` on its own, without needing a custom claim.
+- A Vercel function that verified the Firebase token and self-signed a
+  Supabase-compatible JWT — dropped because it depended on Supabase's legacy
+  HS256 JWT secret, which this project has already rotated away from in
+  favor of asymmetric signing keys (visible under Project Settings → API →
+  JWT Keys). That legacy secret is kept around only so already-issued tokens
+  keep validating until they expire — building new infrastructure on it
+  would break the moment it's revoked.
 
 ## What's already done (this PR)
 
@@ -43,10 +51,9 @@ Function).
 - `supabase/migrations/0003_registration_rpcs.sql` — two RPCs the
   registration flow needs once direct counter/announcement writes are
   admin-only: `claim_founding_member()` and `announce_founding_member()`.
-- `api/session.js` — the Vercel serverless function described above.
-- `src/lib/supabase.ts` — calls `/api/session` and attaches the resulting
-  token to every Supabase request (`accessToken` option), which is what
-  makes `auth.jwt()` resolve in `0002`'s policies.
+- `src/lib/supabase.ts` — sends the Firebase ID token on every Supabase
+  request, which is what makes `auth.jwt()` resolve in `0002`'s policies
+  once Step 1 below is done.
 - `src/lib/db.ts` — `getBasicParticipants()` (public Leaderboard, dashboard
   widgets) no longer requests `email`, since `0002` revokes that column from
   `anon`.
@@ -75,56 +82,22 @@ supposed to until `0002`/`0003` are applied. The steps below finish that.
 
 ## Steps
 
-### Step 1 — Get a Firebase service account key (free)
+### Step 1 — Enable Firebase as a Supabase Third-Party Auth provider
 
-Firebase Console → your project (`codingleague-e7dd9`) → ⚙️ Project
-Settings → **Service Accounts** tab → **Generate new private key**. This
-downloads a JSON file. Nothing here requires Blaze — service accounts and
-Admin SDK token verification are on the free Spark plan.
+Supabase Dashboard → your project → Authentication → Sign In / Providers →
+**Third-Party Auth** → Add provider → **Firebase** → enter project ID:
+```
+codingleague-e7dd9
+```
+→ Save. That's the entire step — no keys, no secrets, nothing to protect.
 
-Open that JSON file, you'll need three fields from it: `project_id`,
-`client_email`, `private_key`.
+### Step 2 — Redeploy the frontend
 
-**Do not commit this file. Do not put it in `.env`.** It's used only in the
-next step, then you can delete the download.
+Vercel Dashboard → your project → Deployments → confirm the latest commit on
+`main` is deployed (it should auto-deploy from the push; redeploy manually if
+not). This ships the `accessToken` bridge in `src/lib/supabase.ts`.
 
-### Step 2 — Get your Supabase JWT secret
-
-Supabase Dashboard → your project → Project Settings → **API** → **JWT
-Settings** → copy the **JWT Secret** (may be labeled "Legacy JWT Secret").
-This is a different value from the anon key or service role key — it's the
-raw secret those keys are *signed with*.
-
-**This value can mint a token for any user, including admins — treat it like
-a password.** Never put it in `.env`, never commit it, never prefix it with
-`VITE_`.
-
-If your project only shows asymmetric "JWT Signing Keys" with no HS256
-secret available at all, tell me — the approach here needs adjusting for
-that case.
-
-### Step 3 — Add 4 environment variables in Vercel
-
-Vercel Dashboard → your project → Settings → **Environment Variables** → add
-each of these (Production + Preview):
-
-| Name | Value |
-|---|---|
-| `FIREBASE_PROJECT_ID` | `project_id` from the service account JSON (`codingleague-e7dd9`) |
-| `FIREBASE_CLIENT_EMAIL` | `client_email` from the service account JSON |
-| `FIREBASE_PRIVATE_KEY` | `private_key` from the service account JSON — paste it exactly as it appears, `\n` sequences and all |
-| `SUPABASE_JWT_SECRET` | the JWT Secret from Step 2 |
-
-None of these get a `VITE_` prefix — that prefix is what makes Vite ship a
-variable to the browser, and these four must never reach the browser.
-
-### Step 4 — Redeploy
-
-Vercel Dashboard → Deployments → redeploy the latest commit on `main` (env
-var changes need a fresh deploy to take effect — Vercel doesn't hot-reload
-them into a running deployment).
-
-### Step 5 — Apply `0002` and `0003`
+### Step 3 — Apply `0002` and `0003`
 
 Supabase SQL Editor, in order:
 [`0002_rls_firebase_identity.sql`](migrations/0002_rls_firebase_identity.sql),
@@ -136,21 +109,6 @@ CSV imports — now scoped to the signed-in user's own row (or to admins), and
 closes the `sensitive_columns_exposed` finding for logged-out visitors.
 
 ## Verifying
-
-**Quick check that the bridge is live at all** — open your deployed site,
-log in, open the browser console, and run:
-
-```js
-await fetch('/api/session', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ idToken: await (await import('firebase/auth')).getAuth().currentUser.getIdToken() }),
-}).then(r => r.json());
-```
-
-Should return `{ access_token: "...", expires_at: ... }`. An error here means
-Step 3 or 4 didn't take — check the function's logs in Vercel Dashboard →
-your project → Deployments → (latest) → Functions → `api/session`.
 
 **Confirm `0002`/`0003` actually applied** — Supabase Dashboard → Database →
 Functions. You should see `is_admin`, `fb_uid`, `next_counter`,
@@ -178,6 +136,13 @@ correctly.
 
 Finally: Supabase Dashboard → Advisors → Security — both findings should
 clear (may take a few minutes to re-scan).
+
+### If writes still fail with an RLS error after Step 1–3
+
+That would mean Third-Party Auth isn't granting the `authenticated` role the
+way expected — tell me and we'll add a diagnostic RPC to see exactly what
+`auth.jwt()` looks like server-side for a real logged-in request, rather than
+guessing further.
 
 ## Known remaining gap — not closed by this PR
 
