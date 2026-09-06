@@ -19,3 +19,12 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
   // policies (supabase/migrations/0002, 0003) resolves to the Firebase UID.
   accessToken: async () => (await auth.currentUser?.getIdToken()) ?? null,
 });
+
+// Temporary debug hook so the Firebase<->Supabase bridge can be checked from
+// the live browser console without a code deploy each time. Safe to leave —
+// exposes nothing that isn't already public (the anon key already ships in
+// the bundle; accessToken just calls the already-client-side Firebase SDK).
+// Remove once the RLS rollout in supabase/MIGRATIONS.md is fully verified.
+if (typeof window !== 'undefined') {
+  (window as any).__supabase = supabase;
+}
