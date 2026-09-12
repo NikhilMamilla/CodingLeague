@@ -7,6 +7,7 @@ import {
 import CBBLogo from '../components/ui/CBBLogo';
 import LoginNotifications from '../components/LoginNotifications';
 import { useAuth } from '../contexts/AuthContext';
+import { TIER_THRESHOLDS } from '../types';
 
 const LINKS = [
   { to: '/dashboard',              label: 'Overview',       icon: LayoutDashboard, end: true  },
@@ -22,26 +23,15 @@ const LINKS = [
 ];
 
 const TIER_CLASS: Record<string, string> = {
-  Beginner:    'tier-beginner',
-  Explorer:    'tier-explorer',
-  Coder:       'tier-coder',
-  Expert:      'tier-expert',
-  Master:      'tier-master',
-  Grandmaster: 'tier-grandmaster',
-};
-
-const TIER_NEXT: Record<string, number> = {
-  Beginner: 1000, Explorer: 1200, Coder: 1500,
-  Expert: 1800, Master: 2200, Grandmaster: 9999,
-};
-const TIER_NEXT_NAME: Record<string, string> = {
-  Beginner: 'Explorer', Explorer: 'Coder', Coder: 'Expert',
-  Expert: 'Master', Master: 'Grandmaster', Grandmaster: 'Max',
-};
-
-const TIER_MIN: Record<string, number> = {
-  Beginner: 0, Explorer: 1000, Coder: 1200,
-  Expert: 1500, Master: 1800, Grandmaster: 2200,
+  Beginner:              'tier-beginner',
+  Explorer:              'tier-explorer',
+  Coder:                 'tier-coder',
+  Specialist:            'tier-coder',
+  Expert:                'tier-expert',
+  'Candidate Master':    'tier-expert',
+  Master:                'tier-master',
+  Grandmaster:           'tier-grandmaster',
+  'Legendary Grandmaster': 'tier-grandmaster',
 };
 
 export default function DashboardLayout() {
@@ -57,12 +47,18 @@ export default function DashboardLayout() {
   const initial  = participant?.fullName?.charAt(0)?.toUpperCase() ?? 'U';
   const rating   = participant?.rating ?? 800;
   const tier     = participant?.tier   ?? 'Beginner';
-  const tierMin  = TIER_MIN[tier]  ?? 0;
-  const tierNext = TIER_NEXT[tier] ?? 1000;
-  const pct      = tier === 'Grandmaster'
-    ? 100
-    : Math.min(100, Math.round(((rating - tierMin) / (tierNext - tierMin)) * 100));
-  const nextTierName = TIER_NEXT_NAME[tier] ?? 'Explorer';
+  // Derived from the same TIER_THRESHOLDS the rest of the app uses (rating
+  // engine, tier badges, CWCL Guide) — this used to be a separate hand-typed
+  // table here that didn't match those thresholds, which could put `rating`
+  // below its own tier's "min" and send this negative (e.g. Explorer was
+  // listed as starting at 1000 here vs. 900 everywhere else).
+  const tierIndex     = TIER_THRESHOLDS.findIndex(t => t.tier === tier);
+  const currentTierT  = tierIndex >= 0 ? TIER_THRESHOLDS[tierIndex] : TIER_THRESHOLDS[0];
+  const nextTierT     = TIER_THRESHOLDS[tierIndex + 1];
+  const pct           = nextTierT
+    ? Math.min(100, Math.max(0, Math.round(((rating - currentTierT.min) / (nextTierT.min - currentTierT.min)) * 100)))
+    : 100; // already at the top tier
+  const nextTierName  = nextTierT ? nextTierT.tier : 'Max';
 
   return (
     <div className="h-screen bg-midnight flex overflow-hidden">

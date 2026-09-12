@@ -51,12 +51,18 @@ export default function MyStats() {
   const winCount    = results.filter(r => r.rank === 1).length;
   const top3Count   = results.filter(r => r.rank <= 3).length;
   const top10Count  = results.filter(r => r.rank <= 10).length;
-  const ratingDelta = results.length ? results[results.length - 1].ratingAfter - results[0].ratingBefore : 0;
+  // getResultsByParticipant() returns newest-first (right for the Full
+  // Contest Log below), but the charts need oldest-first so C1..Cn reads as
+  // an actual timeline instead of running backwards.
+  const chronological = [...results].reverse();
+  const ratingDelta = chronological.length
+    ? chronological[chronological.length - 1].ratingAfter - chronological[0].ratingBefore
+    : 0;
 
   // Chart data
-  const ratingData = results.map((r, i) => ({ label: `C${i + 1}`, rating: r.ratingAfter }));
-  const scoreData  = results.map((r, i) => ({ label: `C${i + 1}`, score: r.score }));
-  const lpData     = results.map((r, i) => ({ label: `C${i + 1}`, lp: r.leaguePoints }));
+  const ratingData = chronological.map((r, i) => ({ label: `C${i + 1}`, rating: r.ratingAfter }));
+  const scoreData  = chronological.map((r, i) => ({ label: `C${i + 1}`, score: r.score }));
+  const lpData     = chronological.map((r, i) => ({ label: `C${i + 1}`, lp: r.leaguePoints }));
 
   // Radar data — normalize 0-100
   const radarData = results.length ? [
