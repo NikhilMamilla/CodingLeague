@@ -446,8 +446,8 @@ export default function Community() {
                         <p className="text-text-secondary/70 text-[11px] mt-1 line-clamp-2 leading-relaxed">{a.body}</p>
                       </div>
                       <span className="text-[10px] text-text-secondary/40 shrink-0 whitespace-nowrap">
-                        {(a as any).createdAt?.seconds
-                          ? new Date((a as any).createdAt.seconds * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                        {a.createdAt
+                          ? new Date(a.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
                           : ''}
                       </span>
                     </div>

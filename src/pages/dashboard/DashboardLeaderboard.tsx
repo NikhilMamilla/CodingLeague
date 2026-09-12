@@ -4,12 +4,30 @@ import { Trophy, TrendingUp, Search, Medal, Crown, Star, Calendar, ChevronDown }
 import { Link } from 'react-router-dom';
 import { getBasicParticipants, getContestCounts, getContests, getResultsByContest } from '../../lib/db';
 import type { Contest, ContestResult } from '../../types';
+import { TIER_THRESHOLDS } from '../../types';
+
+// Color only, not thresholds — see TIER_THRESHOLDS for the actual rating
+// ranges. Specialist/Candidate Master/Legendary Grandmaster reuse an
+// adjacent tier's color rather than going unstyled.
 const TIER_CLASS: Record<string, string> = {
-  Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
-  Expert: 'tier-expert', Master: 'tier-master', Grandmaster: 'tier-grandmaster',
+  Beginner:                'tier-beginner',
+  Explorer:                'tier-explorer',
+  Coder:                   'tier-coder',
+  Specialist:              'tier-coder',
+  Expert:                  'tier-expert',
+  'Candidate Master':      'tier-expert',
+  Master:                  'tier-master',
+  Grandmaster:             'tier-grandmaster',
+  'Legendary Grandmaster': 'tier-grandmaster',
 };
 
-const TIER_ORDER = ['Grandmaster', 'Master', 'Expert', 'Coder', 'Explorer', 'Beginner'];
+// Highest tier first, for the "By Tier" tab. Used to be a hand-typed list
+// missing Specialist/Candidate Master/Legendary Grandmaster entirely, which
+// meant any participant who reached one of those tiers would silently
+// disappear from this tab (byTier[t] is never populated for a tier not in
+// this list). Derived from TIER_THRESHOLDS so it can't drift out of sync
+// again the way it just did.
+const TIER_ORDER = [...TIER_THRESHOLDS].reverse().map(t => t.tier);
 
 type Tab = 'overall' | 'tier' | 'college' | 'contest';
 
@@ -145,7 +163,7 @@ export default function DashboardLeaderboard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="heading-md">Leaderboard</h1>
-          <p className="text-text-secondary text-xs mt-1">Top participants ranked by rating this season.</p>
+          <p className="text-text-secondary text-xs mt-1">Top participants ranked by League Points this season, tie-broken by rating.</p>
         </div>
         <Link to="/leaderboard" target="_blank"
           className="btn-secondary text-xs px-4 py-2 flex items-center gap-2 self-start sm:self-auto">

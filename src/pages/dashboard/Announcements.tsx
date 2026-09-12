@@ -104,9 +104,7 @@ function AnnouncementCard({ a }: { a: Row }) {
 
             <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/5 text-[10px] text-text-secondary/50">
               <span>Posted by {a.createdBy}</span>
-              {(a as any).createdAt?.seconds ? (
-                <span>· {new Date((a as any).createdAt.seconds * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-              ) : a.createdAt ? (
+              {a.createdAt ? (
                 <span>· {new Date(a.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
               ) : null}
             </div>

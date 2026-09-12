@@ -583,7 +583,8 @@ export async function getCertificatesByParticipant(participantId: string): Promi
   const { data } = await supabase
     .from('certificates')
     .select('id, certificate_id, participant_id, participant_name, certificate_type, contest_name, season, position, issued_date, cloudinary_url, status, created_at, verification_code')
-    .eq('participant_id', participantId);
+    .eq('participant_id', participantId)
+    .order('created_at', { ascending: false });
   return (data ?? []).map(rowToCertificate);
 }
 

@@ -7,22 +7,25 @@ import {
   GraduationCap, MapPin, Phone, Mail, Shield, Link, Crown, Star, Lock,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { BADGE_META } from '../../types';
+import { BADGE_META, TIER_THRESHOLDS } from '../../types';
 import { extractHandle, getCanonicalProfileUrl } from '../../lib/profileVerification';
 import FoundingMemberBadge from '../../components/ui/FoundingMemberBadge';
 import { updateParticipant } from '../../lib/db';
 
+// Color only, not thresholds — derived from TIER_THRESHOLDS below instead of a
+// separate hand-typed min/next table, which used to list Explorer as starting
+// at rating 1000 (vs. 900 everywhere else) and caused a negative progress bar.
 const TIER_CLASS: Record<string, string> = {
-  Beginner: 'tier-beginner', Explorer: 'tier-explorer', Coder: 'tier-coder',
-  Expert: 'tier-expert', Master: 'tier-master', Grandmaster: 'tier-grandmaster',
+  Beginner:                'tier-beginner',
+  Explorer:                'tier-explorer',
+  Coder:                   'tier-coder',
+  Specialist:              'tier-coder',
+  Expert:                  'tier-expert',
+  'Candidate Master':      'tier-expert',
+  Master:                  'tier-master',
+  Grandmaster:             'tier-grandmaster',
+  'Legendary Grandmaster': 'tier-grandmaster',
 };
-
-const TIER_NEXT_NAME: Record<string, string> = {
-  Beginner: 'Explorer', Explorer: 'Coder', Coder: 'Expert',
-  Expert: 'Master', Master: 'Grandmaster', Grandmaster: 'Max',
-};
-const TIER_MIN:  Record<string, number> = { Beginner: 0,    Explorer: 1000, Coder: 1200, Expert: 1500, Master: 1800, Grandmaster: 2200 };
-const TIER_NEXT: Record<string, number> = { Beginner: 1000, Explorer: 1200, Coder: 1500, Expert: 1800, Master: 2200, Grandmaster: 9999 };
 
 const PLATFORM_CFG = [
   { key: 'hackerrankUsername' as const, label: 'HackerRank',    color: '#00EA64', bg: 'rgba(0,234,100,0.07)',   required: true  },
@@ -169,10 +172,13 @@ export default function MyProfile() {
     finally { setSavingDetails(false); }
   }
 
-  const tier = participant.tier;
-  const tMin = TIER_MIN[tier]  ?? 0;
-  const tNext = TIER_NEXT[tier] ?? 1000;
-  const rPct  = tier === 'Grandmaster' ? 100 : Math.min(100, Math.round(((participant.rating - tMin) / (tNext - tMin)) * 100));
+  const tier          = participant.tier;
+  const tierIndex     = TIER_THRESHOLDS.findIndex(t => t.tier === tier);
+  const currentTierT  = tierIndex >= 0 ? TIER_THRESHOLDS[tierIndex] : TIER_THRESHOLDS[0];
+  const nextTierT     = TIER_THRESHOLDS[tierIndex + 1];
+  const rPct          = nextTierT
+    ? Math.min(100, Math.max(0, Math.round(((participant.rating - currentTierT.min) / (nextTierT.min - currentTierT.min)) * 100)))
+    : 100;
 
   return (
     <div className="space-y-6">
@@ -232,7 +238,7 @@ export default function MyProfile() {
         </div>
         <div>
           <div className="flex justify-between text-[10px] text-text-secondary/50 mb-1">
-            <span>Progress to {TIER_NEXT_NAME[tier] ?? 'Max'}</span>
+            <span>Progress to {nextTierT ? nextTierT.tier : 'Max'}</span>
             <span className="text-neon-cyan font-numbers">{rPct}%</span>
           </div>
           <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">

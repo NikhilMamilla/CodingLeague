@@ -14,17 +14,22 @@ import toast from 'react-hot-toast';
 import { getContests, getBasicParticipants, getAnnouncements, getSetting, getResultsByParticipant } from '../../lib/db';
 import { supabase } from '../../lib/supabase';
 import { getTopicByWeek, PRACTICE_LINKS } from '../../lib/weekTopics';
+import { TIER_THRESHOLDS } from '../../types';
 
-const TIER_CFG: Record<string, { cls: string; next: number; min: number; nextName: string }> = {
-  Beginner:               { cls: 'text-gray-400 font-semibold',    next: 900,   min: 800,  nextName: 'Explorer'              },
-  Explorer:               { cls: 'text-emerald-400 font-semibold', next: 1000,  min: 900,  nextName: 'Coder'                 },
-  Coder:                  { cls: 'text-cyan-400 font-semibold',    next: 1100,  min: 1000, nextName: 'Specialist'            },
-  Specialist:             { cls: 'text-blue-400 font-semibold',    next: 1250,  min: 1100, nextName: 'Expert'                },
-  Expert:                 { cls: 'text-indigo-400 font-semibold',  next: 1450,  min: 1250, nextName: 'Candidate Master'       },
-  'Candidate Master':     { cls: 'text-purple-400 font-semibold',  next: 1650,  min: 1450, nextName: 'Master'                },
-  Master:                 { cls: 'text-amber-400 font-semibold',   next: 1850,  min: 1650, nextName: 'Grandmaster'           },
-  Grandmaster:            { cls: 'text-rose-400 font-semibold',    next: 2100,  min: 1850, nextName: 'Legendary Grandmaster' },
-  'Legendary Grandmaster':{ cls: 'text-red-500 font-bold',         next: 99999, min: 2100, nextName: 'Max'                   },
+// Color only — the min/max/next-tier numbers used to be duplicated here too,
+// out of sync with TIER_THRESHOLDS (the actual source of truth). That drift
+// is exactly what caused the sidebar progress bar bug (see DashboardLayout.tsx);
+// this table now only owns presentation, not thresholds.
+const TIER_COLOR: Record<string, string> = {
+  Beginner:                'text-gray-400 font-semibold',
+  Explorer:                'text-emerald-400 font-semibold',
+  Coder:                   'text-cyan-400 font-semibold',
+  Specialist:              'text-blue-400 font-semibold',
+  Expert:                  'text-indigo-400 font-semibold',
+  'Candidate Master':      'text-purple-400 font-semibold',
+  Master:                  'text-amber-400 font-semibold',
+  Grandmaster:             'text-rose-400 font-semibold',
+  'Legendary Grandmaster': 'text-red-500 font-bold',
 };
 
 const PLATFORM_CFG = [
@@ -184,10 +189,14 @@ export default function Dashboard() {
     </div>
   );
 
-  const tc  = TIER_CFG[participant.tier] ?? TIER_CFG.Beginner;
-  const pct = participant.tier === 'Grandmaster'
-    ? 100
-    : Math.min(100, Math.round(((participant.rating - tc.min) / (tc.next - tc.min)) * 100));
+  const tierIndex    = TIER_THRESHOLDS.findIndex(t => t.tier === participant.tier);
+  const currentTierT = tierIndex >= 0 ? TIER_THRESHOLDS[tierIndex] : TIER_THRESHOLDS[0];
+  const nextTierT    = TIER_THRESHOLDS[tierIndex + 1]; // undefined at the top tier (Legendary Grandmaster)
+  const tierCls      = TIER_COLOR[participant.tier] ?? TIER_COLOR.Beginner;
+  const nextTierName = nextTierT ? nextTierT.tier : 'Max';
+  const pct = nextTierT
+    ? Math.min(100, Math.max(0, Math.round(((participant.rating - currentTierT.min) / (nextTierT.min - currentTierT.min)) * 100)))
+    : 100;
   const filledProfiles = PLATFORM_CFG.filter(p => (participant as any)[p.key]).length;
 
   return (
@@ -213,7 +222,7 @@ export default function Dashboard() {
                 <span className="font-numbers text-xs text-text-secondary bg-white/5 px-2 py-0.5 rounded">
                   {participant.participantId}
                 </span>
-                <span className={tc.cls}>{participant.tier}</span>
+                <span className={tierCls}>{participant.tier}</span>
                 <span className="text-text-secondary text-xs hidden sm:inline">· {participant.college}</span>
               </div>
             </div>
@@ -225,10 +234,10 @@ export default function Dashboard() {
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <span className="text-[10px] text-text-secondary uppercase tracking-wider">
-              Progress → {tc.nextName}
+              Progress → {nextTierName}
             </span>
             <span className="text-[10px] font-numbers text-neon-cyan">
-              {participant.rating} / {tc.next === 9999 ? '∞' : tc.next}
+              {participant.rating} / {nextTierT ? nextTierT.min : '∞'}
             </span>
           </div>
           <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
@@ -614,8 +623,8 @@ export default function Dashboard() {
                   <div className="text-xs text-white font-medium leading-tight">{a.title}</div>
                   <div className="text-[10px] text-text-secondary/70 mt-0.5 line-clamp-2">{a.body}</div>
                   <div className="text-[9px] text-text-secondary/40 mt-1">
-                    {(a as any).createdAt?.seconds
-                      ? new Date((a as any).createdAt.seconds * 1000).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+                    {a.createdAt
+                      ? new Date(a.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
                       : ''}
                   </div>
                 </div>
